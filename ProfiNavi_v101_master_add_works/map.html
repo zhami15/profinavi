@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Поиск мастеров — ProfiNavi</title>
+  <link rel="stylesheet" href="style.css">
+
+  <meta name="theme-color" content="#ff4fa3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ProfiNavi" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+</head>
+<body class="map-page-body fullscreen-search-body">
+  <main class="fullscreen-search-map">
+    <div id="fullMap" class="full-map fullscreen-map" aria-label="Карта мастеров ProfiNavi"></div>
+    <div id="mapPageError" class="map-page-error hidden"></div>
+    <p id="locationStatus" class="sr-only">Определяем ваше местоположение…</p>
+
+    <section class="search-filter-bar fullscreen-filter-bar" aria-label="Фильтры поиска">
+      <button type="button" class="search-filter-trigger" data-sheet="price"><span>Цена</span><b>⌄</b></button>
+      <button type="button" class="search-filter-trigger" data-sheet="date"><span>Дата</span><b>⌄</b></button>
+      <button type="button" class="search-filter-trigger" data-sheet="area"><span>Район</span><b>⌄</b></button>
+      <button type="button" class="search-filter-trigger" data-sheet="service"><span>Услуги</span><b>⌄</b></button>
+    </section>
+
+    <button id="resetSearchFilters" type="button" class="map-reset-pill hidden">Сбросить</button>
+
+    <section id="masterStrip" class="map-master-strip" aria-label="Мастера рядом"></section>
+    <aside id="selectedMasterCard" class="map-selected-master hidden" aria-live="polite"></aside>
+    <div id="nearbySheet" class="hidden"></div>
+    <span id="searchResultsCount" class="hidden"></span>
+  </main>
+
+  <nav class="bottom-nav map-bottom-nav" aria-label="Нижняя навигация">
+    <button type="button" onclick="location.href='client.html'"><svg class="nav-icon" viewBox="0 0 24 24"><path d="M3.5 10.8 12 4l8.5 6.8v8.7a1 1 0 0 1-1 1h-5.2v-5.6H9.7v5.6H4.5a1 1 0 0 1-1-1v-8.7Z"/></svg><span>Главная</span></button>
+    <button class="active" type="button"><svg class="nav-icon" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg><span>Поиск</span></button>
+    <button type="button" onclick="location.href='snap.html'"><svg class="nav-icon" viewBox="0 0 24 24"><rect x="4" y="6.5" width="16" height="13" rx="3"/><path d="M8.2 6.5 9.5 4h5l1.3 2.5"/><circle cx="12" cy="13" r="3.2"/></svg><span>Работы</span></button>
+    <button type="button" onclick="location.href='chats.html'"><svg class="nav-icon" viewBox="0 0 24 24"><path d="M5 6.5h14a1.5 1.5 0 0 1 1.5 1.5v7.5A1.5 1.5 0 0 1 19 17H9l-4.5 3v-12A1.5 1.5 0 0 1 5 6.5Z"/><path d="M8 10.5h8M8 13.5h5"/></svg><span>Чаты</span></button>
+    <button type="button" onclick="location.href='favorites.html'"><svg class="nav-icon nav-heart" viewBox="0 0 24 24"><path d="M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 5.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z"/></svg><span>Избранное</span></button>
+  </nav>
+
+  <div id="filterBackdrop" class="filter-backdrop hidden" aria-hidden="true"></div>
+  <section id="filterSheet" class="filter-sheet" aria-hidden="true" aria-labelledby="filterSheetTitle">
+    <div class="filter-sheet-handle"></div>
+    <div class="filter-sheet-head">
+      <div><h2 id="filterSheetTitle">Фильтр</h2><p id="filterSheetHint"></p></div>
+      <button id="closeFilterSheet" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div id="filterSheetContent" class="filter-sheet-content"></div>
+    <div class="filter-sheet-actions">
+      <button id="clearCurrentFilter" class="filter-clear" type="button">Сбросить</button>
+      <button id="applyCurrentFilter" class="filter-apply" type="button">Показать мастеров</button>
+    </div>
+  </section>
+  <script src="map.js"></script>
+</body>
+</html>

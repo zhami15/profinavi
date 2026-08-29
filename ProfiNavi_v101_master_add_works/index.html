@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#fff7fb">
+<title>ProfiNavi</title>
+<link rel="stylesheet" href="style.css">
+<style>
+body.welcome-page{margin:0;background:linear-gradient(180deg,#fff9fc 0%,#fff 55%,#fff7fb 100%);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2f2930}
+.welcome-shell{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;padding:28px 20px calc(28px + env(safe-area-inset-bottom));box-sizing:border-box;max-width:520px;margin:0 auto}
+.welcome-brand{text-align:center;margin-bottom:40px}
+.welcome-logo{width:82px;height:82px;margin:0 auto 18px;border-radius:26px;background:#ffedf6;display:grid;place-items:center;font-size:38px;box-shadow:0 12px 30px rgba(194,83,139,.12)}
+.welcome-brand h1{font-size:34px;line-height:1;margin:0;font-weight:900;letter-spacing:-1.2px}
+.welcome-brand p{margin:10px auto 0;color:#8d7d85;font-size:14px;max-width:300px;line-height:1.45}
+.welcome-cards{display:grid;gap:12px}
+.welcome-choice{display:flex;align-items:center;gap:14px;width:100%;border:1px solid #efe3e9;background:#fff;border-radius:22px;padding:17px;text-decoration:none;color:#2f2930;box-shadow:0 10px 30px rgba(63,38,51,.06)}
+.welcome-choice .icon{width:50px;height:50px;border-radius:17px;background:#fff0f7;display:grid;place-items:center;font-size:24px;flex:0 0 auto}
+.welcome-choice .copy{min-width:0;flex:1}
+.welcome-choice b{display:block;font-size:16px;margin-bottom:4px}
+.welcome-choice span{display:block;color:#8d7d85;font-size:11px;line-height:1.35}
+.welcome-choice .arrow{font-size:24px;color:#c59aad}
+.welcome-choice.master{border-color:#f1d9e5;background:#fffafd}
+.welcome-choice.master .icon{background:#ffe5f2}
+.welcome-note{text-align:center;color:#a3959d;font-size:10px;margin-top:20px}
+</style>
+</head>
+<body class="welcome-page">
+<main class="welcome-shell">
+  <section class="welcome-brand">
+    <div class="welcome-logo">✦</div>
+    <h1>ProfiNavi</h1>
+    <p>Найдите своего мастера или управляйте работой в ProfiNavi Pro.</p>
+  </section>
+
+  <section class="welcome-cards">
+    <a class="welcome-choice" href="client.html" onclick="localStorage.setItem('pn_last_mode','client')">
+      <div class="icon">⌕</div>
+      <div class="copy">
+        <b>Я ищу мастера</b>
+        <span>Смотреть работы, цены, свободное время и записываться.</span>
+      </div>
+      <div class="arrow">›</div>
+    </a>
+
+    <a class="welcome-choice master" href="master-login.html" id="welcomeMasterLink">
+      <div class="icon">✦</div>
+      <div class="copy">
+        <b>Я мастер</b>
+        <span>Войти в ProfiNavi Pro и управлять записями, графиком и профилем.</span>
+      </div>
+      <div class="arrow">›</div>
+    </a>
+  </section>
+  <p class="welcome-note">Вы сможете легко переключаться между ProfiNavi и ProfiNavi Pro.</p>
+</main>
+<script>
+const masterLink=document.getElementById('welcomeMasterLink');
+if(localStorage.getItem('pn_master_session')){
+  masterLink.href='master.html';
+  masterLink.querySelector('.copy span').textContent='Открыть ProfiNavi Pro.';
+}
+masterLink.addEventListener('click',()=>localStorage.setItem('pn_last_mode','master'));
+</script>
+</body>
+</html>

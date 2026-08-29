@@ -47,11 +47,14 @@ function getClientUser(){
 function saveClientUser(user){
  localStorage.setItem('pn_client_user',JSON.stringify(user));
 }
-function finishBooking(){
+async function finishBooking(){
  const user=getClientUser();
- if(user&&user.name){
-   completeBooking();
-   return;
+ if(user&&user.name){ completeBooking(); return; }
+ if(window.PNAuth){
+   try{
+     const synced=await window.PNAuth.syncLocalUser();
+     if(synced&&synced.name){ completeBooking(); return; }
+   }catch(e){ console.warn('Supabase auth unavailable:',e); }
  }
  openAuthModal();
 }
@@ -96,7 +99,10 @@ function openAuthModal(){
    btn.onclick=()=>{
      authMethod=btn.dataset.method;
      if(authMethod==='phone'||authMethod==='email') showContactStep();
-     else showNameStep(authMethod);
+     else {
+       if(!window.PNAuth){alert('Supabase не загрузился. Откройте сайт через Vercel.');return;}
+       window.PNAuth.social(authMethod==='apple'?'apple':'google').then(({error})=>{if(error)alert('Не удалось войти: '+error.message)});
+     }
    };
  });
 }
@@ -116,14 +122,13 @@ function showContactStep(){
      <button class="pn-auth-primary" id="sendAuthCode" type="button">Продолжить</button>
    </div>`;
  sheet.querySelector('.pn-auth-back').onclick=openAuthModal;
- sheet.querySelector('#sendAuthCode').onclick=()=>{
-   const value=sheet.querySelector('#authContact').value.trim();
-   if(!value){
-     sheet.querySelector('#authContact').focus();
-     return;
-   }
-   authValue=value;
-   showCodeStep();
+ sheet.querySelector('#sendAuthCode').onclick=async()=>{
+   const value=sheet.querySelector('#authContact').value.trim();if(!value){sheet.querySelector('#authContact').focus();return}
+   const btn=sheet.querySelector('#sendAuthCode');btn.disabled=true;btn.textContent='Отправляем…';authValue=value;
+   try{
+     if(!window.PNAuth) throw new Error('Supabase не загрузился. Откройте сайт через Vercel, а не как локальный HTML-файл.');
+     const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;showCodeStep()
+   }catch(e){alert('Не удалось отправить код: '+e.message);btn.disabled=false;btn.textContent='Продолжить'}
  };
 }
 
@@ -135,7 +140,7 @@ function showCodeStep(){
      <h2>Введите код</h2>
      <p class="pn-auth-sub">Код отправлен на <b>${authValue}</b></p>
      <div class="pn-code-row">
-       ${[0,1,2,3].map(i=>`<input class="pn-code-input" inputmode="numeric" maxlength="1" aria-label="Цифра ${i+1}">`).join('')}
+       ${[0,1,2,3,4,5].map(i=>`<input class="pn-code-input" inputmode="numeric" maxlength="1" aria-label="Цифра ${i+1}">`).join('')}
      </div>
      <button class="pn-auth-primary" id="verifyAuthCode" type="button">Подтвердить</button>
      <button class="pn-auth-resend" type="button">Отправить код ещё раз</button>
@@ -153,15 +158,13 @@ function showCodeStep(){
  });
  inputs[0]?.focus();
  sheet.querySelector('.pn-auth-back').onclick=showContactStep;
- sheet.querySelector('#verifyAuthCode').onclick=()=>{
-   const code=inputs.map(x=>x.value).join('');
-   if(code.length!==4){
-     inputs.find(x=>!x.value)?.focus();
-     return;
-   }
-   showNameStep(authMethod,authValue);
+ sheet.querySelector('#verifyAuthCode').onclick=async()=>{
+   const code=inputs.map(x=>x.value).join('');if(code.length!==6){inputs.find(x=>!x.value)?.focus();return}
+   const btn=sheet.querySelector('#verifyAuthCode');btn.disabled=true;btn.textContent='Проверяем…';
+   try{const {error}=await window.PNAuth.verifyOtp(authMethod,authValue,code);if(error)throw error;const synced=await window.PNAuth.syncLocalUser();if(synced&&synced.name){closeAuthModal();completeBooking();return}showNameStep(authMethod,authValue)}
+   catch(e){alert('Неверный или просроченный код: '+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
  };
- sheet.querySelector('.pn-auth-resend').onclick=()=>showCodeStep();
+ sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert('Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
 }
 
 function showNameStep(method,value=''){
@@ -181,19 +184,11 @@ function showNameStep(method,value=''){
  sheet.querySelector('.pn-auth-back').onclick=()=>method==='phone'||method==='email'?showCodeStep():openAuthModal();
  const nameInput=sheet.querySelector('#authName');
  nameInput.focus();
- sheet.querySelector('#finishRegistration').onclick=()=>{
-   const name=nameInput.value.trim();
-   if(!name){
-     nameInput.focus();
-     return;
-   }
-   saveClientUser({
-     name,
-     method,
-     contact:value||null,
-     registeredAt:new Date().toISOString()
-   });
-   closeAuthModal();
-   completeBooking();
+ sheet.querySelector('#finishRegistration').onclick=async()=>{
+   const name=nameInput.value.trim();if(!name){nameInput.focus();return}
+   const btn=sheet.querySelector('#finishRegistration');btn.disabled=true;btn.textContent='Сохраняем…';
+   try{await window.PNAuth.saveName(name);closeAuthModal();completeBooking()}
+   catch(e){alert('Не удалось сохранить профиль: '+e.message);btn.disabled=false;btn.textContent='Продолжить'}
  };
 }
+\nwindow.addEventListener('DOMContentLoaded',()=>window.PNAuth?.syncLocalUser().catch(()=>{}));\n

@@ -191,4 +191,5 @@ function showNameStep(method,value=''){
    catch(e){alert('Не удалось сохранить профиль: '+e.message);btn.disabled=false;btn.textContent='Продолжить'}
  };
 }
-\nwindow.addEventListener('DOMContentLoaded',()=>window.PNAuth?.syncLocalUser().catch(()=>{}));\n
+
+window.addEventListener('DOMContentLoaded',()=>window.PNAuth?.syncLocalUser().catch(()=>{}));

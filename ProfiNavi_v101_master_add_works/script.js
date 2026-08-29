@@ -564,7 +564,7 @@ function renderUpcomingBooking(){
   const expired=isChatExpired(b);
   const statusText=cancelled?'Отклонено':expired?'Чат завершён':confirmed?'Подтверждено':'Ожидает подтверждения';
   const statusClass=cancelled?'cancelled':expired?'expired':confirmed?'confirmed':'pending';
-  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div><div class="booking-home-actions"><a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>${(!confirmed&&!cancelled&&!expired)?`<button class="ghost" onclick="confirmBookingDemo('${id}')">Демо: подтвердить</button>`:''}</div><p class="booking-home-note">${cancelled?'Мастер отклонил эту запись. В чате есть автоматическое сообщение от мастера.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Можно написать мастеру сразу, пока заявка ожидает подтверждения.'}</p></article>`
+  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div><div class="booking-home-actions"><a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>${(!confirmed&&!cancelled&&!expired)?`<button class="ghost" onclick="confirmBookingDemo('${id}')">Демо: подтвердить</button>`:''}${(confirmed&&!expired)?`<button class="ghost" onclick="pnCompleteBookingDemo('${id}')">Демо: процедура завершена</button>`:''}</div><p class="booking-home-note">${cancelled?'Мастер отклонил эту запись. В чате есть автоматическое сообщение от мастера.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Можно написать мастеру сразу, пока заявка ожидает подтверждения.'}</p></article>`
  }).join('')}</div>`;
 }
 function confirmBookingDemo(id){
@@ -782,3 +782,83 @@ window.addEventListener('pageshow',()=>{
   try{renderUpcomingBooking()}catch(e){}
   try{if(document.getElementById('twoGisMap'))initHomeLeafletMap()}catch(e){}
 });
+
+// v105 account state: anonymous browsing, persistent client account, linked ProfiNaviPro.
+async function pnRefreshClientAccount(){
+ const btn=document.getElementById('openAccount');
+ const host=document.getElementById('clientAccountDynamic');
+ let user=null;try{user=await window.PNAuth?.syncLocalUser()}catch(e){console.warn(e)}
+ if(!user?.name){
+   if(btn){btn.textContent='';btn.style.visibility='hidden'}
+   if(host)host.innerHTML='<div class="client-account-header"><div class="client-account-title"><h2>ProfiNavi</h2><p>Аккаунт появится после первой записи</p></div></div>';
+   return;
+ }
+ if(btn){btn.style.visibility='visible';btn.textContent=(user.name[0]||'U').toUpperCase()}
+ let hasMaster=false;try{hasMaster=await window.PNAuth.hasMasterProfile()}catch(e){}
+ if(host)host.innerHTML=`
+   <div class="client-account-header"><div class="big-avatar">${(user.name[0]||'U').toUpperCase()}</div><div class="client-account-title"><h2>${user.name}</h2><p>Аккаунт ProfiNavi</p></div></div>
+   <div class="client-account-section"><h3>Информация об аккаунте</h3><div class="client-account-list">
+     <div class="client-account-row"><span>Имя</span><strong>${user.name}</strong></div>
+     ${user.phone?`<div class="client-account-row"><span>Телефон</span><strong>${user.phone}</strong></div>`:''}
+   </div></div>
+   <div class="client-account-section client-account-pro"><h3>ProfiNaviPro</h3><p>${hasMaster?'Управляйте своим кабинетом мастера.':'Хотите принимать клиентов через ProfiNavi?'}</p>
+   <button class="wide account-master-link" id="pnMasterAction">${hasMaster?'Кабинет мастера · ProfiNaviPro':'Стать мастером'}</button></div>`;
+ host.querySelector('#pnMasterAction').onclick=()=>location.href=hasMaster?'master-login.html':'master-login.html#register';
+}
+window.addEventListener('DOMContentLoaded',()=>pnRefreshClientAccount());
+window.addEventListener('pageshow',()=>pnRefreshClientAccount());
+
+/* v108 — post-service rating popup (test version) */
+function pnReviewKey(){return 'pn_verified_reviews'}
+function pnHasReview(bookingId){
+ try{return (JSON.parse(localStorage.getItem(pnReviewKey())||'[]')||[]).some(r=>String(r.bookingId)===String(bookingId))}catch(e){return false}
+}
+function pnBookingFinished(b){
+ if(!b || b.status==='cancelled') return false;
+ if(b.status==='completed'||b.status==='done') return true;
+ const dt=bookingDateTime(b);
+ return b.status==='confirmed' && dt && Date.now()>=dt.getTime();
+}
+function pnReadPhotos(files){
+ return Promise.all([...files].slice(0,3).map(file=>new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>resolve(null);r.readAsDataURL(file)}))).then(x=>x.filter(Boolean));
+}
+function pnOpenRatingPopup(booking){
+ if(!booking || pnHasReview(booking.id) || document.getElementById('pnRatingOverlay')) return;
+ const m=masters[Number(booking.master)]||masters[0];
+ const ov=document.createElement('div');ov.id='pnRatingOverlay';ov.className='pn-rating-overlay';
+ ov.innerHTML=`<div class="pn-rating-sheet">
+   <button class="pn-rating-close" aria-label="Закрыть">×</button>
+   <div class="pn-rating-avatar"><img src="${m.avatar}" alt="${m.name}"></div>
+   <h2>Как вам услуга?</h2><p class="pn-rating-sub">${m.name} · ${booking.service||'Услуга'}</p>
+   <div class="pn-rating-stars" role="radiogroup" aria-label="Оценка"><button data-rate="1">★</button><button data-rate="2">★</button><button data-rate="3">★</button><button data-rate="4">★</button><button data-rate="5">★</button></div>
+   <p class="pn-rating-hint">Поставьте оценку от 1 до 5</p>
+   <textarea class="pn-rating-comment" placeholder="Комментарий (необязательно)"></textarea>
+   <label class="pn-rating-photo"><span>＋ Добавить фото</span><small>Необязательно · до 3 фото</small><input type="file" accept="image/*" multiple hidden></label>
+   <div class="pn-rating-previews"></div>
+   <button class="pn-rating-submit" disabled>Отправить оценку</button>
+   <button class="pn-rating-later">Не сейчас</button>
+ </div>`;
+ document.body.appendChild(ov);let rating=0,photos=[];
+ const stars=[...ov.querySelectorAll('.pn-rating-stars button')],submit=ov.querySelector('.pn-rating-submit');
+ stars.forEach(btn=>btn.onclick=()=>{rating=Number(btn.dataset.rate);stars.forEach((s,i)=>s.classList.toggle('active',i<rating));submit.disabled=false;ov.querySelector('.pn-rating-hint').textContent=['','Плохо','Ниже ожиданий','Нормально','Хорошо','Отлично!'][rating]});
+ ov.querySelector('input[type=file]').onchange=async e=>{photos=await pnReadPhotos(e.target.files);ov.querySelector('.pn-rating-previews').innerHTML=photos.map(x=>`<img src="${x}" alt="Фото отзыва">`).join('')};
+ const close=()=>ov.remove();ov.querySelector('.pn-rating-close').onclick=close;ov.querySelector('.pn-rating-later').onclick=close;
+ submit.onclick=()=>{
+   if(!rating)return;
+   const all=JSON.parse(localStorage.getItem(pnReviewKey())||'[]');
+   const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
+   all.unshift({id:'review_'+Date.now(),bookingId:booking.id,clientId:user.id||user.phone||'test-client',masterId:Number(booking.master)||0,name:user.name||booking.clientName||'Клиент',service:booking.service||'Услуга',rating,text:ov.querySelector('.pn-rating-comment').value.trim(),photos:photos.slice(0,3),date:new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true});
+   localStorage.setItem(pnReviewKey(),JSON.stringify(all));
+   booking.reviewed=true;const list=getBookings();const found=list.find(x=>String(x.id)===String(booking.id));if(found)found.reviewed=true;localStorage.setItem('pn_bookings',JSON.stringify(list));
+   ov.querySelector('.pn-rating-sheet').innerHTML='<div class="pn-rating-thanks"><div>✓</div><h2>Спасибо за оценку!</h2><p>Ваш отзыв поможет другим выбрать мастера.</p></div>';setTimeout(close,1200);
+ };
+}
+function pnCheckPendingReview(){
+ const b=getBookings().filter(x=>pnBookingFinished(x)&&!x.reviewed&&!pnHasReview(x.id)).sort((a,b)=>(bookingDateTime(b)?.getTime()||0)-(bookingDateTime(a)?.getTime()||0))[0];
+ if(b)setTimeout(()=>pnOpenRatingPopup(b),500);
+}
+function pnCompleteBookingDemo(id){
+ const list=getBookings(),b=list.find(x=>String(x.id)===String(id));if(!b)return;b.status='completed';localStorage.setItem('pn_bookings',JSON.stringify(list));renderUpcomingBooking();pnOpenRatingPopup(b);
+}
+window.addEventListener('DOMContentLoaded',pnCheckPendingReview);
+window.addEventListener('pageshow',pnCheckPendingReview);

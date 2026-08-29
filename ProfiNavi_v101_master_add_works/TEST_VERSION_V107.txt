@@ -1,0 +1,17 @@
+ProfiNavi v107 — TEST VERSION
+
+Client registration:
+- phone only
+- test OTP: 111111
+- no real SMS is sent
+- after OTP, enter required name
+- client account persists in localStorage
+
+Master registration:
+- phone + password + profile basics
+- test OTP: 111111
+- no real SMS is sent
+- credentials are stored locally ONLY for this test build
+- later login works with the registered test phone + password
+
+IMPORTANT: This test build is not for production. Replace the local test OTP flow with NIKITA server-side SMS before launch.

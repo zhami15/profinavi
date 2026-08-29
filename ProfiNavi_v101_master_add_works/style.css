@@ -2860,3 +2860,14 @@ img{max-width:100%}
     font-size:28px;
   }
 }
+
+/* v108 — Yandex-like post-service rating */
+.pn-rating-overlay{position:fixed;inset:0;background:rgba(24,20,22,.42);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:0}
+.pn-rating-sheet{width:min(100%,520px);background:#fff;border-radius:24px 24px 0 0;padding:20px 22px calc(22px + env(safe-area-inset-bottom));position:relative;text-align:center;box-shadow:0 -10px 35px rgba(0,0,0,.12)}
+.pn-rating-close{position:absolute;right:16px;top:14px;border:0;background:#f5f2f3;width:34px;height:34px;border-radius:50%;font-size:24px;color:#544b4f;line-height:1}
+.pn-rating-avatar img{width:58px;height:58px;border-radius:50%;object-fit:cover}.pn-rating-sheet h2{margin:10px 0 4px;font-size:23px}.pn-rating-sub{margin:0;color:#81767b;font-size:14px}
+.pn-rating-stars{display:flex;justify-content:center;gap:8px;margin:20px 0 6px}.pn-rating-stars button{border:0;background:transparent;color:#ddd5d8;font-size:38px;padding:0 2px;transition:.15s}.pn-rating-stars button.active{color:#ffb800;transform:scale(1.06)}
+.pn-rating-hint{height:20px;margin:0 0 14px;color:#766b70;font-size:13px}.pn-rating-comment{box-sizing:border-box;width:100%;min-height:82px;border:1px solid #e9e3e6;border-radius:16px;padding:13px 14px;font:inherit;resize:none;outline:none;background:#fbfafb}.pn-rating-comment:focus{border-color:#f2a6c8}
+.pn-rating-photo{display:flex;align-items:center;justify-content:space-between;text-align:left;border:1px solid #eee7ea;border-radius:15px;padding:12px 14px;margin-top:10px;cursor:pointer}.pn-rating-photo span{font-weight:650}.pn-rating-photo small{color:#9a8f94}
+.pn-rating-previews{display:flex;gap:8px;margin-top:10px}.pn-rating-previews img{width:58px;height:58px;border-radius:12px;object-fit:cover}.pn-rating-submit{width:100%;border:0;border-radius:15px;padding:14px;margin-top:16px;background:var(--pink,#f35c9d);color:#fff;font:inherit;font-weight:700}.pn-rating-submit:disabled{opacity:.38}.pn-rating-later{border:0;background:transparent;color:#887d82;padding:12px;font:inherit}.pn-rating-thanks{padding:35px 10px}.pn-rating-thanks>div{margin:auto;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:#fff0f6;color:var(--pink,#f35c9d);font-size:28px;font-weight:700}.pn-rating-thanks p{color:#81767b}
+@media(min-width:600px){.pn-rating-overlay{align-items:center;padding:20px}.pn-rating-sheet{border-radius:24px}}

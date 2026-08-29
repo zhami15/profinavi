@@ -1,1 +1,35 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Вход в ProfiNavi Pro — ProfiNavi</title><link rel="stylesheet" href="style.css"></head><body class="master-login-page"><main class="master-login-card"><a href="index.html" class="master-login-back">‹</a><div class="master-login-logo">Profi<span>Navi</span></div><h1>Вход в ProfiNavi Pro</h1><p>Управляйте записями, услугами и профилем.</p><label>Телефон<input id="masterPhone" type="tel" placeholder="+996 555 000 000"></label><label>Пароль<input id="masterPassword" type="password" placeholder="••••••••"></label><button id="masterLoginBtn">Войти</button><button class="master-demo-btn" id="masterDemoBtn">Открыть демо-кабинет</button><small>Для прототипа можно открыть демо без регистрации.</small></main><script>function login(){localStorage.setItem('pn_master_session',JSON.stringify({master:0,name:'Tunuk Nails'}));localStorage.setItem('pn_last_mode','master');location.href='master.html'}document.getElementById('masterLoginBtn').onclick=login;document.getElementById('masterDemoBtn').onclick=login;</script></body></html>
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ProfiNaviPro — вход</title><link rel="stylesheet" href="style.css"><style>
+.pro-auth{max-width:440px;margin:0 auto;min-height:100dvh;padding:28px 20px;box-sizing:border-box;background:#fff}.pro-auth .brand{text-align:center;font-size:28px;font-weight:900;margin:38px 0 8px}.pro-auth .brand span{color:#ff4fa3}.pro-auth h1{text-align:center;font-size:24px;margin:18px 0 6px}.pro-auth .sub{text-align:center;color:#85767e;margin:0 0 26px}.pro-auth label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}.pro-auth input,.pro-auth select{width:100%;box-sizing:border-box;border:1px solid #eadfe5;border-radius:14px;padding:14px;font-size:16px;background:#fff}.pro-auth .primary{width:100%;border:0;border-radius:15px;padding:15px;margin-top:20px;background:#ff4fa3;color:#fff;font-weight:800;font-size:16px}.pro-auth .switch{display:block;text-align:center;margin:20px auto;color:#ff4fa3;font-weight:800;background:none;border:0}.pro-auth .back{position:absolute;text-decoration:none;color:#333;font-size:30px}.pro-auth .hidden{display:none}.pro-auth .note{font-size:12px;color:#8d7d85;text-align:center;line-height:1.45}.pro-auth .code{letter-spacing:8px;text-align:center;font-size:22px}
+</style></head><body><main class="pro-auth"><a class="back" href="index.html">‹</a><div class="brand">ProfiNavi<span>Pro</span></div>
+<section id="loginPane"><h1>Вход для мастера</h1><p class="sub">Войдите в свой кабинет ProfiNaviPro</p><label>Номер телефона</label><input id="loginPhone" type="tel" placeholder="+996 555 000 000"><label>Пароль</label><input id="loginPassword" type="password" placeholder="Пароль"><button class="primary" id="loginBtn">Войти</button><button class="switch" id="showRegister">Стать мастером</button></section>
+<section id="registerPane" class="hidden"><h1>Стать мастером</h1><p class="sub">Создайте ProfiNaviPro. Номер подтверждается кодом только при первой регистрации.</p><label>Имя *</label><input id="regName" autocomplete="name"><label>Номер телефона *</label><input id="regPhone" type="tel" placeholder="+996 555 000 000"><label>Пароль *</label><input id="regPassword" type="password" minlength="6"><label>Название салона</label><input id="regSalon" placeholder="Если есть"><label>Район / адрес *</label><input id="regArea" placeholder="Например: 5 мкр"><label>Специализация *</label><select id="regSpec"><option value="">Выберите</option><option>Ногти</option><option>Ресницы</option><option>Брови</option><option>Волосы</option><option>Макияж</option></select><button class="primary" id="registerBtn">Получить код</button><button class="switch" id="showLogin">Уже есть ProfiNaviPro? Войти</button><p class="note">После подтверждения откроется кабинет. Профиль не показывается клиентам, пока вы его не оформите и не опубликуете.</p></section>
+<section id="codePane" class="hidden"><h1>Подтвердите номер</h1><p class="sub">Тестовый режим: SMS пока не отправляется. Код для проверки — 111111.</p><input id="regCode" class="code" inputmode="numeric" maxlength="6" placeholder="000000"><button class="primary" id="verifyBtn">Подтвердить</button><button class="switch" id="backRegister">Изменить номер</button></section>
+</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-client.js"></script><script>
+const $=id=>document.getElementById(id);let pending=null;const TEST_CODE='111111';
+function pane(id){['loginPane','registerPane','codePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
+$('showRegister').onclick=()=>pane('registerPane');if(location.hash==='#register')pane('registerPane');$('showLogin').onclick=()=>pane('loginPane');$('backRegister').onclick=()=>pane('registerPane');
+$('loginBtn').onclick=()=>{
+ const phone=$('loginPhone').value.trim().replace(/[^\d+]/g,''),password=$('loginPassword').value;
+ let saved=null;try{saved=JSON.parse(localStorage.getItem('pn_test_master_credentials')||'null')}catch(e){}
+ if(!saved)return alert('Сначала зарегистрируйте тестовый аккаунт мастера.');
+ if(phone!==saved.phone||password!==saved.password)return alert('Неверный номер телефона или пароль.');
+ localStorage.setItem('pn_master_session',JSON.stringify({userId:saved.id,name:saved.name,test:true}));
+ localStorage.setItem('pn_last_mode','master');location.href='master.html';
+};
+$('registerBtn').onclick=async()=>{
+ const name=$('regName').value.trim(),phone=$('regPhone').value.trim().replace(/[^\d+]/g,''),password=$('regPassword').value,salon=$('regSalon').value.trim(),area=$('regArea').value.trim(),spec=$('regSpec').value;
+ if(!name||!phone||password.length<6||!area||!spec){alert('Заполните обязательные поля. Пароль — минимум 6 символов.');return}
+ pending={id:'test_master_'+Date.now(),name,phone,password,salon,area,spec};
+ pane('codePane');alert('Тестовый режим. Код подтверждения: '+TEST_CODE);
+};
+$('verifyBtn').onclick=()=>{
+ if(!pending)return;const code=$('regCode').value.trim();if(code!==TEST_CODE)return alert('Неверный код. Для теста используйте '+TEST_CODE);
+ localStorage.setItem('pn_test_master_credentials',JSON.stringify(pending));
+ localStorage.setItem('pn_master_session',JSON.stringify({userId:pending.id,name:pending.name,test:true}));
+ localStorage.setItem('pn_last_mode','master');
+ let profile={};try{profile=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
+ profile={...profile,name:pending.name,area:pending.area,address:pending.area,salon_name:pending.salon||'',specialization:pending.spec,is_published:false};
+ localStorage.setItem('pn_master_profile_0',JSON.stringify(profile));
+ location.href='master.html';
+};
+</script></body></html>

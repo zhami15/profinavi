@@ -18,7 +18,7 @@
     <header class="topbar">
       <span class="topbar-spacer" aria-hidden="true"></span>
       <div class="logo">Profi<span>Navi</span></div>
-      <button class="avatar-btn" id="openAccount">M</button>
+      <button class="avatar-btn" id="openAccount" aria-label="Аккаунт"></button>
     </header>
 
     <section class="hero">
@@ -146,39 +146,12 @@
   <div class="modal hidden" id="accountModal">
     <div class="account-card client-account-card">
       <button class="close" data-close="accountModal">×</button>
-
-      <div class="client-account-header">
-        <div class="big-avatar">M</div>
-        <div class="client-account-title">
-          <h2>Миса</h2>
-          <p>Аккаунт ProfiNavi</p>
-        </div>
-      </div>
-
-      <div class="client-account-section">
-        <h3>Информация об аккаунте</h3>
-        <div class="client-account-list">
-          <div class="client-account-row"><span>Имя</span><strong>Миса</strong></div>
-          <div class="client-account-row"><span>Город</span><strong>Бишкек</strong></div>
-          <div class="client-account-row"><span>Режим</span><strong>Клиент</strong></div>
-        </div>
-      </div>
-
-      <div class="client-account-section client-account-pro">
-        <h3>ProfiNavi Pro</h3>
-        <p>Управление записями, услугами и расписанием.</p>
-        <button class="wide account-master-link" id="openMasterCabinet">Кабинет мастера</button>
-        <small class="account-master-hint" id="masterCabinetHint"></small>
-      </div>
-
-      <div class="client-account-section client-account-test">
-        <h3>Тестовые данные</h3>
-        <p>Удалит только тестовые записи и переписки на этом устройстве.</p>
-        <button class="wide light" id="clearTestData">Очистить тестовые данные</button>
-      </div>
+      <div id="clientAccountDynamic"></div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
   <script src="script.js"></script>
 
 </body>

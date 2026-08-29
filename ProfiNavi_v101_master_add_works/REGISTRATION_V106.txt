@@ -1,0 +1,16 @@
+ProfiNavi v106 — phone-only registration
+
+CLIENT
+- Browsing without registration.
+- Registration appears only on final booking confirmation.
+- Only phone registration is shown. Email, Apple and Google registration options removed.
+- Flow: phone -> SMS OTP -> required name -> booking.
+- Existing authenticated client session skips registration.
+
+MASTER
+- ProfiNaviPro login remains phone + password.
+- New master registration: required details -> SMS OTP -> ProfiNaviPro.
+- Master public profile starts unpublished.
+
+IMPORTANT
+Real SMS delivery requires configuring the SMS provider/backend. No fake OTP is used.

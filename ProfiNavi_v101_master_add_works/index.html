@@ -56,10 +56,7 @@ body.welcome-page{margin:0;background:linear-gradient(180deg,#fff9fc 0%,#fff 55%
 </main>
 <script>
 const masterLink=document.getElementById('welcomeMasterLink');
-if(localStorage.getItem('pn_master_session')){
-  masterLink.href='master.html';
-  masterLink.querySelector('.copy span').textContent='Открыть ProfiNavi Pro.';
-}
+masterLink.href='master-login.html';
 masterLink.addEventListener('click',()=>localStorage.setItem('pn_last_mode','master'));
 </script>
 </body>

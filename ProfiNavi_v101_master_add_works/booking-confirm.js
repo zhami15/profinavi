@@ -80,15 +80,7 @@ function openAuthModal(){
    <button class="pn-auth-option phone" data-method="phone" type="button">
      <span>☎</span><b>Продолжить по номеру телефона</b>
    </button>
-   <button class="pn-auth-option email" data-method="email" type="button">
-     <span>✉</span><b>Продолжить с email</b>
-   </button>
-   <button class="pn-auth-option social" data-method="apple" type="button">
-     <span class="apple-mark">●</span><b>Продолжить с Apple</b>
-   </button>
-   <button class="pn-auth-option social" data-method="google" type="button">
-     <span class="google-mark">G</span><b>Продолжить с Google</b>
-   </button>
+
 
    <p class="pn-auth-legal">Продолжая, вы соглашаетесь с условиями ProfiNavi.</p>
  </div>`;
@@ -98,11 +90,7 @@ function openAuthModal(){
  overlay.querySelectorAll('[data-method]').forEach(btn=>{
    btn.onclick=()=>{
      authMethod=btn.dataset.method;
-     if(authMethod==='phone'||authMethod==='email') showContactStep();
-     else {
-       if(!window.PNAuth){alert('Supabase не загрузился. Откройте сайт через Vercel.');return;}
-       window.PNAuth.social(authMethod==='apple'?'apple':'google').then(({error})=>{if(error)alert('Не удалось войти: '+error.message)});
-     }
+     if(authMethod==='phone') showContactStep();
    };
  });
 }
@@ -110,7 +98,7 @@ function openAuthModal(){
 function showContactStep(){
  const sheet=document.querySelector('#pnAuthOverlay .pn-auth-sheet');
  if(!sheet)return;
- const phone=authMethod==='phone';
+ const phone=true;
  sheet.innerHTML=`<button class="pn-auth-back" type="button">‹</button>
    <div class="pn-auth-step">
      <h2>${phone?'Введите номер телефона':'Введите email'}</h2>
@@ -138,7 +126,7 @@ function showCodeStep(){
  sheet.innerHTML=`<button class="pn-auth-back" type="button">‹</button>
    <div class="pn-auth-step">
      <h2>Введите код</h2>
-     <p class="pn-auth-sub">Код отправлен на <b>${authValue}</b></p>
+     <p class="pn-auth-sub">${window.PN_TEST_MODE?'Тестовый режим — SMS пока не отправляется. Введите код <b>111111</b>.':`Код отправлен на <b>${authValue}</b>`}</p>
      <div class="pn-code-row">
        ${[0,1,2,3,4,5].map(i=>`<input class="pn-code-input" inputmode="numeric" maxlength="1" aria-label="Цифра ${i+1}">`).join('')}
      </div>
@@ -164,13 +152,13 @@ function showCodeStep(){
    try{const {error}=await window.PNAuth.verifyOtp(authMethod,authValue,code);if(error)throw error;const synced=await window.PNAuth.syncLocalUser();if(synced&&synced.name){closeAuthModal();completeBooking();return}showNameStep(authMethod,authValue)}
    catch(e){alert('Неверный или просроченный код: '+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
  };
- sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert('Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
+ sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert(window.PN_TEST_MODE?'Тестовый код: 111111':'Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
 }
 
 function showNameStep(method,value=''){
  const sheet=document.querySelector('#pnAuthOverlay .pn-auth-sheet');
  if(!sheet)return;
- const provider=method==='apple'?'Apple':method==='google'?'Google':'';
+ const provider='';
  sheet.innerHTML=`<button class="pn-auth-back" type="button">‹</button>
    <div class="pn-auth-step">
      <h2>${provider?`Продолжить с ${provider}`:'Почти готово'}</h2>
@@ -181,7 +169,7 @@ function showNameStep(method,value=''){
      </label>
      <button class="pn-auth-primary" id="finishRegistration" type="button">Продолжить</button>
    </div>`;
- sheet.querySelector('.pn-auth-back').onclick=()=>method==='phone'||method==='email'?showCodeStep():openAuthModal();
+ sheet.querySelector('.pn-auth-back').onclick=showCodeStep;
  const nameInput=sheet.querySelector('#authName');
  nameInput.focus();
  sheet.querySelector('#finishRegistration').onclick=async()=>{

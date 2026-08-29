@@ -1,0 +1,12 @@
+ProfiNavi v105 registration architecture
+- Anonymous clients can browse without registration.
+- Registration is requested only on final booking confirmation.
+- Phone/email OTP then mandatory name.
+- Existing Supabase session skips repeat registration.
+- Client account appears in top-right only after registration.
+- Client account shows "Стать мастером" or "Кабинет мастера · ProfiNaviPro" when master_profiles exists.
+- "Я мастер" always opens ProfiNaviPro login.
+- Master registration includes name, phone, password UI, salon, area/address, specialization, and first-registration phone OTP.
+- New master profile is created unpublished (is_published=false).
+- SMS sending requires the SMS provider/backend to be connected. NIKITA credentials are not embedded in frontend.
+NOTE: true phone+password login is intentionally not faked in this static build; it requires server-side master authentication design. Password is not stored in public tables/localStorage.

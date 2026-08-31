@@ -157,8 +157,24 @@ if($('findAddressBtn')) $('findAddressBtn').onclick=async()=>{
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
   const marker=L.marker(center,{draggable:true}).addTo(map);
   function save(){const x=marker.getLatLng();window.pickedLocation={lat:x.lat,lng:x.lng};}
-  marker.on('dragend',save);
-  map.on('click',e=>{marker.setLatLng(e.latlng);save();});
+  async function moved(){
+    save();
+    const x=marker.getLatLng();
+    try{
+      const r=await pnReverseGeocode(x.lat,x.lng);
+      if(r?.found&&r.address){
+        const input=document.getElementById('regAddress');
+        const oldAddress=input?.value?.trim()||'';
+        if(r.address!==oldAddress){
+          if(confirm('Точка перемещена.\nНовый адрес: '+r.address+'\n\nПодтвердить этот адрес?')){
+            if(input)input.value=r.address;
+          }
+        }
+      }
+    }catch(err){console.warn('reverse geocode',err)}
+  }
+  marker.on('dragend',moved);
+  map.on('click',e=>{marker.setLatLng(e.latlng);moved();});
   el._map=map;save();setTimeout(()=>map.invalidateSize(true),150);
   const b=document.getElementById('findAddressBtn');
   if(b&&!b.dataset.bound){b.dataset.bound='1';b.onclick=async()=>{

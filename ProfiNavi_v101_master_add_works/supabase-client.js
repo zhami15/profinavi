@@ -125,3 +125,10 @@ async function pnGeocodeAddress(address,city){
   if(data?.error) throw new Error(data.error);
   return data||{found:false};
 }
+
+async function pnReverseGeocode(lat,lng){
+ const {data,error}=await pnSupabase.functions.invoke('profinavi-reverse-geocode',{body:{lat,lng}});
+ if(error) throw error;
+ if(data?.error) throw new Error(data.error);
+ return data;
+}

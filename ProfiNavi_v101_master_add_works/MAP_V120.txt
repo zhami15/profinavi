@@ -1,0 +1,9 @@
+v120
+Manual map movement now performs reverse geocoding.
+When marker is moved/tapped:
+- exact coordinates are retained
+- ProfiNavi detects the address at that point
+- confirmation appears: "Точка перемещена. Новый адрес: ..."
+- on confirmation the address input is replaced with the detected address
+- on cancel the typed address stays unchanged, while user can move/correct the point again
+Applied to master registration and master address editing.

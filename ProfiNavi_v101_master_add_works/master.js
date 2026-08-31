@@ -1181,7 +1181,17 @@ document.addEventListener('click',e=>{
       address.parentElement.appendChild(wrap);
       const p=getProfile();
       const initial=(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))?[Number(p.lat),Number(p.lng)]:null;
-      await PNMap.pick(document.getElementById('eaLocationMap'),initial,x=>pnEditPickedLocation=x);
+      await PNMap.pick(document.getElementById('eaLocationMap'),initial,async x=>{
+        const previous=pnEditPickedLocation; pnEditPickedLocation=x;
+        if(previous){
+          try{
+            const r=await pnReverseGeocode(x.lat,x.lng);
+            if(r?.found&&r.address&&r.address!==address.value.trim()){
+              if(confirm('Точка перемещена.\nНовый адрес: '+r.address+'\n\nПодтвердить этот адрес?')) address.value=r.address;
+            }
+          }catch(e){console.warn('reverse geocode',e)}
+        }
+      });
       document.getElementById('eaFindAddress').onclick=async()=>{
         try{
           const g=await pnGeocodeAddress(address.value.trim(),p.city||'Бишкек');

@@ -1,0 +1,1 @@
+Map block guaranteed in master registration; Leaflet loaded directly; independent map boot; fixed 280px height.

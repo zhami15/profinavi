@@ -1,3 +1,17 @@
+
+(function(){
+ try{
+  const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
+  if(cp && window.masters && masters[0]){
+   const lat=Number(cp.lat??cp.latitude),lng=Number(cp.lng??cp.longitude);
+   if(Number.isFinite(lat)&&Number.isFinite(lng)){masters[0].lat=lat;masters[0].lng=lng;}
+   if(cp.address)masters[0].address=cp.address;
+   if(cp.area)masters[0].district=cp.area;
+   if(cp.profileName||cp.name)masters[0].name=cp.profileName||cp.name;
+  }
+ }catch(e){}
+})();
+
 const masters=[
  {id:0,name:'Tunuk Nails',services:['nails'],district:'Vefa Center · Байтик Баатыра 98',area:'center',rating:4.9,priceValue:1400,price:'от 1400 сом',avatar:'assets/tunuk-new.png',lat:42.857255,lng:74.609848,available:['today','tomorrow']},
  {id:1,name:'Adel Beauty',services:['hair','makeup'],district:'Нижний Джал',area:'jal',rating:4.8,priceValue:1200,price:'от 1200 сом',avatar:'assets/adel-new.png',lat:42.842427,lng:74.566250,available:['tomorrow']},
@@ -11,6 +25,17 @@ const masters=[
  {id:9,name:'Nellinails Studio',services:['nails'],district:'Куйбышева 93',area:'center',rating:4.8,priceValue:1000,price:'от 1000 сом',avatar:'assets/nellinails-new.png',lat:42.87725,lng:74.61475,available:['today','tomorrow']},
  {id:10,name:'Bogdan Beauty',services:['lashes','brows'],district:'Бишкек',area:'center',rating:4.7,priceValue:1700,price:'от 1700 сом',avatar:'assets/bogdan-new.png',lat:42.86650,lng:74.59830,available:['tomorrow']}
 ];
+
+
+try{
+ const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
+ if(cp && masters[0]){
+   if(cp.profileName||cp.name) masters[0].name=cp.profileName||cp.name;
+   if(cp.area||cp.address) masters[0].district=[cp.area,cp.address].filter(Boolean).join(' · ');
+   if(Number.isFinite(Number(cp.lat))) masters[0].lat=Number(cp.lat);
+   if(Number.isFinite(Number(cp.lng))) masters[0].lng=Number(cp.lng);
+ }
+}catch(e){}
 
 let map, markers=[], userMarker, userLocation;
 const filters={priceMin:0,priceMax:null,date:'all',areas:new Set(),services:new Set()};
@@ -153,3 +178,13 @@ document.getElementById('closeFilterSheet').onclick=closeFilter;filterBackdrop.o
 document.getElementById('clearCurrentFilter').onclick=()=>{if(currentSheet==='area'||currentSheet==='service')draft=new Set();else if(currentSheet==='price'){filters.priceMin=0;filters.priceMax=null;}else draft='all';openFilter(currentSheet)};
 resetBtn.onclick=()=>{filters.priceMin=0;filters.priceMax=null;filters.date='all';filters.areas.clear();filters.services.clear();renderMarkers()};
 renderSheet();updateTriggerLabels();loadMap();
+
+window.addEventListener('pageshow',()=>{
+ try{
+  const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
+  if(cp&&window.masters&&masters[0]){
+   const lat=Number(cp.lat??cp.latitude),lng=Number(cp.lng??cp.longitude);
+   if(Number.isFinite(lat)&&Number.isFinite(lng)){masters[0].lat=lat;masters[0].lng=lng;}
+  }
+ }catch(e){}
+});

@@ -1,0 +1,7 @@
+v114
+FIXED: Supabase built-in phone/password login is disabled in this project.
+New Edge Function profinavi-phone-password-login converts the verified Kyrgyz phone into the account's internal synthetic email server-side, validates the password through Supabase Auth, and returns a Supabase session.
+Frontend never needs the synthetic email.
+Used for both client and master login.
+Registration still verifies phone with test OTP 111111, then sets the password on the same Supabase user.
+Production: replace test OTP with NIKITA SMS; password-login architecture can remain.

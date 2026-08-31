@@ -3,41 +3,42 @@ const master=q.get('master')||'0', service=q.get('service')||'Услуга', tim
 const names=['Tunuk Nails','Adel Beauty','Alya Lashes','Mira Brows'];
 const dateText=date.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
 document.getElementById('confirmContent').innerHTML=`<header class="booking-head"><button class="booking-close" onclick="history.back()">‹</button><h1>Подтверждение</h1><span></span></header><section class="booking-confirm-card"><div class="confirm-icon">✓</div><h2>Проверьте запись</h2><dl><div><dt>Мастер</dt><dd>${names[Number(master)]||names[0]}</dd></div><div><dt>Услуга</dt><dd>${service}</dd></div><div><dt>Дата</dt><dd>${dateText}</dd></div><div><dt>Время</dt><dd>${time}</dd></div></dl><label>Комментарий мастеру<textarea placeholder="Например: хочу короткую форму и нежный дизайн"></textarea></label><button onclick="finishBooking()">Подтвердить запись</button></section>`;
-function completeBooking(){
+async function completeBooking(){
+ const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
+ const masterName=names[Number(master)]||names[0];
+ const rawDate=q.get('date')||new Date().toISOString().slice(0,10);
+ const startsAt=new Date(`${rawDate}T${time||'12:00'}:00`);
+ let dbRow;
+ try{
+   if(!window.PNData)throw new Error('База данных не загрузилась');
+   dbRow=await window.PNData.createBooking({master:Number(master),masterName,service,startsAt:startsAt.toISOString(),price:0});
+ }catch(e){
+   alert('Не удалось сохранить запись в базе: '+e.message);
+   return;
+ }
  const booking={
-   id:'b_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+   id:dbRow.id,
    master:Number(master),
+   masterName,
    service,
    date:date.toISOString(),
    dateText,
    time,
    status:'pending',
-   clientName:(JSON.parse(localStorage.getItem('pn_client_user')||'null')?.name)||'Клиент ProfiNavi',
-   createdAt:new Date().toISOString()
+   clientName:user.name||'Клиент ProfiNavi',
+   createdAt:dbRow.created_at||new Date().toISOString(),
+   syncedToSupabase:true
  };
-
  const bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');
  bookings.push(booking);
  localStorage.setItem('pn_bookings',JSON.stringify(bookings));
-
  const chats=JSON.parse(localStorage.getItem('pn_chats')||'{}');
  const key=String(booking.id);
- chats[key]=[
-   {
-     from:'client',
-     text:`Здравствуйте! Хочу записаться на услугу 「${booking.service}」 — ${dateText} в ${booking.time}.`,
-     ts:Date.now(),
-     kind:'booking-request'
-   }
- ];
+ chats[key]=[{from:'client',text:`Здравствуйте! Хочу записаться на услугу 「${booking.service}」 — ${dateText} в ${booking.time}.`,ts:Date.now(),kind:'booking-request'}];
  localStorage.setItem('pn_chats',JSON.stringify(chats));
- const masterReads=JSON.parse(localStorage.getItem('pn_master_chat_read_at_v49')||'{}');
- delete masterReads[key];
- localStorage.setItem('pn_master_chat_read_at_v49',JSON.stringify(masterReads));
-
- // No numeric unread counters: unread is derived from message time vs read time.
+ const masterReads=JSON.parse(localStorage.getItem('pn_master_chat_read_at_v49')||'{}');delete masterReads[key];localStorage.setItem('pn_master_chat_read_at_v49',JSON.stringify(masterReads));
  localStorage.removeItem('pn_booking');
- alert('Заявка отправлена мастеру.');
+ alert('Заявка сохранена в ProfiNavi и отправлена мастеру.');
  location.href='client.html';
 }
 
@@ -49,14 +50,14 @@ function saveClientUser(user){
 }
 async function finishBooking(){
  const user=getClientUser();
- if(user&&user.name){ completeBooking(); return; }
+ if(user&&user.name){ await completeBooking(); return; }
  if(window.PNAuth){
    try{
      const synced=await window.PNAuth.syncLocalUser();
-     if(synced&&synced.name){ completeBooking(); return; }
+     if(synced&&synced.name){ await completeBooking(); return; }
    }catch(e){ console.warn('Supabase auth unavailable:',e); }
  }
- openAuthModal();
+ location.href='client-login.html?return=booking-confirm.html';
 }
 
 let authMethod='';
@@ -98,14 +99,13 @@ function openAuthModal(){
 function showContactStep(){
  const sheet=document.querySelector('#pnAuthOverlay .pn-auth-sheet');
  if(!sheet)return;
- const phone=true;
  sheet.innerHTML=`<button class="pn-auth-back" type="button">‹</button>
    <div class="pn-auth-step">
-     <h2>${phone?'Введите номер телефона':'Введите email'}</h2>
-     <p class="pn-auth-sub">${phone?'Мы отправим код подтверждения по SMS.':'Мы отправим код подтверждения на почту.'}</p>
+     <h2>Введите номер телефона</h2>
+     <p class="pn-auth-sub">Мы отправим код подтверждения по SMS.</p>
      <label class="pn-auth-field">
-       <span>${phone?'Номер телефона':'Email'}</span>
-       <input id="authContact" type="${phone?'tel':'email'}" placeholder="${phone?'+996 555 000 000':'name@example.com'}" autocomplete="${phone?'tel':'email'}">
+       <span>Номер телефона</span>
+       <input id="authContact" type="tel" placeholder="+996 555 000 000" autocomplete="tel">
      </label>
      <button class="pn-auth-primary" id="sendAuthCode" type="button">Продолжить</button>
    </div>`;
@@ -149,7 +149,7 @@ function showCodeStep(){
  sheet.querySelector('#verifyAuthCode').onclick=async()=>{
    const code=inputs.map(x=>x.value).join('');if(code.length!==6){inputs.find(x=>!x.value)?.focus();return}
    const btn=sheet.querySelector('#verifyAuthCode');btn.disabled=true;btn.textContent='Проверяем…';
-   try{const {error}=await window.PNAuth.verifyOtp(authMethod,authValue,code);if(error)throw error;const synced=await window.PNAuth.syncLocalUser();if(synced&&synced.name){closeAuthModal();completeBooking();return}showNameStep(authMethod,authValue)}
+   try{const {error}=await window.PNAuth.verifyOtp(authMethod,authValue,code);if(error)throw error;const synced=await window.PNAuth.syncLocalUser();if(synced&&synced.name){closeAuthModal();await completeBooking();return}showNameStep(authMethod,authValue)}
    catch(e){alert('Неверный или просроченный код: '+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
  };
  sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert(window.PN_TEST_MODE?'Тестовый код: 111111':'Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
@@ -175,7 +175,7 @@ function showNameStep(method,value=''){
  sheet.querySelector('#finishRegistration').onclick=async()=>{
    const name=nameInput.value.trim();if(!name){nameInput.focus();return}
    const btn=sheet.querySelector('#finishRegistration');btn.disabled=true;btn.textContent='Сохраняем…';
-   try{await window.PNAuth.saveName(name);closeAuthModal();completeBooking()}
+   try{await window.PNAuth.saveName(name);closeAuthModal();await completeBooking()}
    catch(e){alert('Не удалось сохранить профиль: '+e.message);btn.disabled=false;btn.textContent='Продолжить'}
  };
 }

@@ -1,0 +1,12 @@
+v117
+Master chooses exact location manually.
+Registration:
+- address text remains
+- "Найти адрес на карте" can suggest a point
+- master can tap the exact building or drag the marker
+- exact selected lat/lng are saved to Supabase
+- registration requires a map point
+Address editing:
+- map picker added
+- exact manually selected point overrides automatic geocoding
+All client maps continue to use saved coordinates.

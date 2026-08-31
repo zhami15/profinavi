@@ -1,0 +1,6 @@
+v115
+- Master address is geocoded through Supabase Edge Function + OpenStreetMap Nominatim.
+- Registration saves latitude/longitude to master_profiles.
+- Master login restores saved coordinates.
+- Client home map, search map, and public profile map use master's saved coordinates.
+- Editing address in ProfiNaviPro re-geocodes and updates Supabase.

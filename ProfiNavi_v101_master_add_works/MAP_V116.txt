@@ -1,0 +1,6 @@
+v116
+- Uses the geocoded coordinates of the master address instead of the old demo point.
+- Refreshes coordinates on Home and Search map data.
+- Adds an address map to the public master profile.
+- Adds an address map to the master's ProfiNaviPro profile.
+- Shared pn-map.js renders OpenStreetMap/Leaflet markers from saved master coordinates.

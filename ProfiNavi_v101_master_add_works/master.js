@@ -392,7 +392,7 @@ function renderDashboard(){
  const root=document.getElementById('masterRoot'), bookings=getBookings(), today=new Date(), p=profile(), unreadChats=jget('pn_master_chat_unread',{}), unreadTotal=Object.values(unreadChats).reduce((a,b)=>a+Number(b||0),0);
  const todayList=bookings.filter(b=>sameDay(b.date,today)), pending=bookings.filter(b=>b.status==='pending'), confirmed=todayList.filter(b=>b.status==='confirmed');
  const revenue=confirmed.reduce((s,b)=>s+bookingRevenue(b),0), key=today.toISOString().slice(0,10), slots=getSlots()[key]||[];
- root.innerHTML=`${masterHeader('Здравствуйте, '+p.name,'')}
+ root.innerHTML=`${masterHeader('Здравствуйте, '+(p.ownerName||session()?.name||p.name),'')}
  <section class="master-metrics"><article><small>Сегодня</small><b>${todayList.length}</b><span>записей</span></article><article><small>Доход</small><b>${money(revenue).replace(' сом','')}</b><span>сом</span></article><article><small>Рейтинг</small><b>${p.rating}</b><span>★</span></article></section>
 
  <section class="master-section quick-approval-section">
@@ -834,18 +834,35 @@ function openAddressEditor(){
    scheduleType.onchange=()=>customDays.style.display=scheduleType.value==='Выбрать дни'?'flex':'none';
  }
  ov.querySelector('.edit-close').onclick=()=>ov.remove();
- ov.querySelector('.edit-save').onclick=()=>{
+ ov.querySelector('.edit-save').onclick=async()=>{
    const openTime=ov.querySelector('#eaOpen').value;
    const closeTime=ov.querySelector('#eaClose').value;
+   const newAddress=ov.querySelector('#eaAddress').value.trim();
+   const newArea=ov.querySelector('#eaArea').value;
+   let geo=pnEditPickedLocation?{found:true,lat:pnEditPickedLocation.lat,lng:pnEditPickedLocation.lng}:{found:false};
+   if(!geo.found){try{if(newAddress)geo=await pnGeocodeAddress(newAddress,p.city||'Бишкек')}catch(e){console.warn('geocode',e)}}
    saveProfile({...p,scheduleType:ov.querySelector('#eaScheduleType')?.value||'Ежедневно',workDays:(()=>{const t=ov.querySelector('#eaScheduleType')?.value||'Ежедневно';if(t==='Ежедневно')return ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];if(t==='Будни')return ['ПН','ВТ','СР','ЧТ','ПТ'];if(t==='Выходные')return ['СБ','ВС'];return [...ov.querySelectorAll('#customDays button.active')].map(b=>b.dataset.day)})(),
-     area:ov.querySelector('#eaArea').value,
-     address:ov.querySelector('#eaAddress').value.trim(),
+     area:newArea,
+     address:newAddress,
+     lat:geo?.found?geo.lat:p.lat,
+     lng:geo?.found?geo.lng:p.lng,
      openTime,
      closeTime,
      hours:`${openTime}–${closeTime}`,
      payment:ov.querySelector('#eaPayment').value,
      locationInfo:ov.querySelector('#eaInfo').value.trim()
    });
+   try{
+     const sess=session();
+     if(sess?.userId && window.pnSupabase){
+       await pnSupabase.from('master_profiles').update({
+         area:newArea,address:newAddress,
+         latitude:geo?.found?geo.lat:null,
+         longitude:geo?.found?geo.lng:null,
+         updated_at:new Date().toISOString()
+       }).eq('user_id',sess.userId);
+     }
+   }catch(e){console.warn('profile address sync',e)}
    ov.remove();renderProfile()
  };
 }
@@ -1128,4 +1145,51 @@ window.addEventListener('storage',e=>{
      try{renderDashboard()}catch(_){}
    }
  }
+});
+
+
+async function pnMasterOwnMap(){
+  if(!window.PNMap)return;
+  const profile=getProfile?getProfile():null;
+  if(!profile)return;
+  let el=document.getElementById('pnMasterOwnMap');
+  const host=document.querySelector('#profileView,.master-profile,.profile-page,main');
+  if(!host)return;
+  if(!el){
+    const sec=document.createElement('section');
+    sec.style.cssText='margin:16px 0 28px';
+    sec.innerHTML='<h3 style="margin:0 16px 10px">Адрес на карте</h3><div id="pnMasterOwnMap" style="height:240px;margin:0 16px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>';
+    host.appendChild(sec); el=sec.querySelector('#pnMasterOwnMap');
+  }
+  await PNMap.render(el,profile,15);
+}
+window.addEventListener('load',()=>setTimeout(pnMasterOwnMap,250));
+window.addEventListener('pageshow',()=>setTimeout(pnMasterOwnMap,250));
+
+
+let pnEditPickedLocation=null;
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(!t)return;
+  if((t.textContent||'').trim().toLowerCase().includes('адрес') || t.id==='editAddress'){
+    setTimeout(async()=>{
+      const address=document.getElementById('eaAddress');
+      if(!address||document.getElementById('eaLocationMap'))return;
+      const wrap=document.createElement('div');
+      wrap.style.cssText='margin-top:12px';
+      wrap.innerHTML='<div style="font-weight:700;margin-bottom:6px">Точка на карте</div><div style="font-size:13px;color:#777;margin-bottom:8px">Нажмите на дом или перетащите маркер.</div><button type="button" id="eaFindAddress" class="secondary" style="width:100%;margin-bottom:8px">Найти введённый адрес</button><div id="eaLocationMap" style="height:250px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>';
+      address.parentElement.appendChild(wrap);
+      const p=getProfile();
+      const initial=(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))?[Number(p.lat),Number(p.lng)]:null;
+      await PNMap.pick(document.getElementById('eaLocationMap'),initial,x=>pnEditPickedLocation=x);
+      document.getElementById('eaFindAddress').onclick=async()=>{
+        try{
+          const g=await pnGeocodeAddress(address.value.trim(),p.city||'Бишкек');
+          if(!g?.found)return alert('Адрес не найден. Поставьте точку вручную.');
+          pnEditPickedLocation={lat:g.lat,lng:g.lng};
+          await PNMap.pick(document.getElementById('eaLocationMap'),[g.lat,g.lng],x=>pnEditPickedLocation=x);
+        }catch(err){alert('Поставьте точку вручную на карте.')}
+      };
+    },80);
+  }
 });

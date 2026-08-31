@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ProfiNavi — вход</title><link rel="stylesheet" href="style.css">
+<style>
+.auth{max-width:440px;margin:0 auto;min-height:100dvh;padding:28px 20px;box-sizing:border-box;background:#fff}
+.back{position:absolute;text-decoration:none;color:#333;font-size:30px} .brand{text-align:center;font-size:30px;font-weight:900;margin:38px 0 8px}
+.brand span{color:#ff4fa3} h1{text-align:center;font-size:24px;margin:18px 0 6px} .sub{text-align:center;color:#85767e;margin:0 0 26px;line-height:1.4}
+label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px} input{width:100%;box-sizing:border-box;border:1px solid #eadfe5;border-radius:14px;padding:14px;font-size:16px;background:#fff}
+.phonebox{display:flex;align-items:center;border:1px solid #eadfe5;border-radius:14px;overflow:hidden;background:#fff} .prefix{padding:0 12px;font-weight:800;white-space:nowrap;border-right:1px solid #eee}
+.phonebox input{border:0;border-radius:0;outline:0} .primary{width:100%;border:0;border-radius:15px;padding:15px;margin-top:20px;background:#ff4fa3;color:#fff;font-weight:800;font-size:16px}
+.switch,.ghost{display:block;text-align:center;margin:16px auto;color:#ff4fa3;font-weight:800;background:none;border:0} .ghost{color:#675a61;font-weight:700}
+.hidden{display:none} .code{letter-spacing:8px;text-align:center;font-size:22px} .note{font-size:12px;color:#8d7d85;text-align:center;line-height:1.45}
+</style></head><body><main class="auth"><a class="back" href="index.html">‹</a><div class="brand">Profi<span>Navi</span></div>
+<section id="loginPane"><h1>Вход</h1><p class="sub">Войдите как клиент ProfiNavi</p>
+<label>Номер телефона</label><div class="phonebox"><span class="prefix">🇰🇬 +996</span><input id="loginPhone" type="tel" inputmode="numeric" placeholder="555 55 55 55" maxlength="12"></div>
+<label>Пароль</label><input id="loginPassword" type="password" placeholder="Пароль">
+<button class="primary" id="loginBtn">Войти</button><button class="switch" id="showRegister">Зарегистрироваться</button>
+<button class="ghost" id="forgotBtn">Забыли пароль?</button></section>
+
+<section id="registerPane" class="hidden"><h1>Регистрация клиента</h1><p class="sub">Подтвердите номер один раз и создайте пароль для следующих входов.</p>
+<label>Имя *</label><input id="regName" autocomplete="name">
+<label>Номер телефона *</label><div class="phonebox"><span class="prefix">🇰🇬 +996</span><input id="regPhone" type="tel" inputmode="numeric" placeholder="555 55 55 55" maxlength="12"></div>
+<label>Пароль *</label><input id="regPassword" type="password" minlength="6" placeholder="Минимум 6 символов">
+<button class="primary" id="registerBtn">Зарегистрировать аккаунт</button><button class="switch" id="showLogin">Уже есть аккаунт? Войти</button></section>
+
+<section id="codePane" class="hidden"><h1>Подтвердите номер</h1><p class="sub">Тестовая версия: используйте код <b>111111</b>.</p>
+<input id="regCode" class="code" inputmode="numeric" maxlength="6" placeholder="000000"><button class="primary" id="verifyBtn">Подтвердить</button><button class="switch" id="backRegister">Изменить номер</button></section>
+<section id="resetPane" class="hidden"><h1>Восстановление пароля</h1><p class="sub">Введите номер, привязанный к аккаунту.</p><label>Номер телефона</label><div class="phonebox"><span class="prefix">🇰🇬 +996</span><input id="resetPhone" type="tel" inputmode="numeric" placeholder="555 55 55 55" maxlength="12"></div><button class="primary" id="resetSendBtn">Получить код</button><button class="switch" id="resetBack">Назад ко входу</button></section>
+<section id="resetCodePane" class="hidden"><h1>Новый пароль</h1><p class="sub">Тестовый код — <b>111111</b>.</p><input id="resetCode" class="code" inputmode="numeric" maxlength="6" placeholder="000000"><label>Новый пароль *</label><input id="newPassword" type="password" minlength="6"><button class="primary" id="resetVerifyBtn">Сохранить новый пароль</button></section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-client.js"></script><script>
+
+function digitsLocal(v){
+  let d=String(v||'').replace(/\D/g,'');
+  if(d.startsWith('996')) d=d.slice(3);
+  if(d.startsWith('0')) d=d.slice(1);
+  return d.slice(0,9);
+}
+function fullPhone(v){const d=digitsLocal(v);return d.length===9?'+996'+d:''}
+function formatLocal(v){
+  const d=digitsLocal(v);
+  const a=d.slice(0,3), b=d.slice(3,5), c=d.slice(5,7), e=d.slice(7,9);
+  return [a,b,c,e].filter(Boolean).join(' ');
+}
+function bindPhone(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.addEventListener('input',()=>{el.value=formatLocal(el.value)});
+}
+
+const $=id=>document.getElementById(id);let pending=null;
+const params=new URLSearchParams(location.search);
+const returnTo=params.get('return')||'client.html';
+function finishClientAuth(){localStorage.setItem('pn_last_mode','client');location.href=returnTo;}
+function pane(id){['loginPane','registerPane','codePane','resetPane','resetCodePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
+bindPhone('loginPhone');bindPhone('regPhone');bindPhone('resetPhone');
+$('showRegister').onclick=()=>pane('registerPane');$('showLogin').onclick=()=>pane('loginPane');$('backRegister').onclick=()=>pane('registerPane');$('forgotBtn').onclick=()=>pane('resetPane');$('resetBack').onclick=()=>pane('loginPane');
+$('loginBtn').onclick=async()=>{
+ const p=fullPhone($('loginPhone').value),password=$('loginPassword').value,btn=$('loginBtn');
+ if(!p||!password)return alert('Введите номер телефона и пароль.');
+ btn.disabled=true;btn.textContent='Входим…';
+ try{
+   const data=await pnPhonePasswordLogin(p,password);
+   await PNAuth.syncLocalUser();finishClientAuth();
+ }catch(e){alert('Не удалось войти: '+e.message);btn.disabled=false;btn.textContent='Войти'}
+};
+$('registerBtn').onclick=async()=>{
+ const name=$('regName').value.trim(),p=fullPhone($('regPhone').value),password=$('regPassword').value;
+ if(!name||!p||password.length<6)return alert('Введите имя, полный номер и пароль минимум 6 символов.');
+ pending={name,phone:p,password};
+ try{const {error}=await PNAuth.sendOtp('phone',p);if(error)throw error;pane('codePane')}catch(e){alert('Не удалось начать регистрацию: '+e.message)}
+};
+$('verifyBtn').onclick=async()=>{
+ if(!pending)return;const code=$('regCode').value.trim(),btn=$('verifyBtn');if(code.length!==6)return alert('Введите 6 цифр.');
+ btn.disabled=true;btn.textContent='Создаём аккаунт…';
+ try{
+   const {error}=await PNAuth.verifyOtp('phone',pending.phone,code);if(error)throw error;
+   const user=await PNAuth.currentUser();if(!user)throw new Error('Не удалось создать сессию');
+   const {error:pwErr}=await pnSupabase.auth.updateUser({password:pending.password,data:{name:pending.name,phone:pending.phone}});if(pwErr)throw pwErr;
+   const {error:pErr}=await pnSupabase.from('profiles').upsert({id:user.id,name:pending.name,phone:pending.phone,role:'client',updated_at:new Date().toISOString()},{onConflict:'id'});if(pErr)throw pErr;
+   await PNAuth.syncLocalUser();finishClientAuth();
+ }catch(e){alert('Не удалось зарегистрироваться: '+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
+};
+let crp='';$('resetSendBtn').onclick=async()=>{crp=fullPhone($('resetPhone').value);if(!crp)return alert('Введите полный номер.');try{const {error}=await PNAuth.sendOtp('phone',crp);if(error)throw error;pane('resetCodePane')}catch(e){alert(e.message)}};$('resetVerifyBtn').onclick=async()=>{let c=$('resetCode').value.trim(),pw=$('newPassword').value;if(c.length!==6||pw.length<6)return alert('Введите код и пароль минимум 6 символов.');try{let {error}=await PNAuth.verifyOtp('phone',crp,c);if(error)throw error;let r=await pnSupabase.auth.updateUser({password:pw});if(r.error)throw r.error;alert('Пароль изменён.');pane('loginPane')}catch(e){alert(e.message)}};</script></body></html>

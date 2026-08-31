@@ -1,0 +1,4 @@
+v118
+FIX: registration map was not visible because pn-map.js loaded after the inline registration script.
+Now pn-map.js loads before registration logic, and the map initializes after DOMContentLoaded.
+Also guarantees Leaflet CSS is loaded even if Leaflet JS already exists.

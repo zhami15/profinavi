@@ -1,0 +1,5 @@
+v113
+- Fixed master category dropdown: closes when clicking outside or pressing Escape.
+- Selected categories remain shown in dropdown button.
+- Fixed master registration failure caused by missing master_profiles.profile_name column in Supabase.
+- Added clearer required-field validation and registration button loading/reset behavior.

@@ -1,0 +1,8 @@
+ProfiNavi v110 TEST
+- Client login/registration: Kyrgyzstan +996 prefix fixed, local number format 555 55 55 55, password login.
+- Anonymous browsing remains available via “Продолжить без регистрации”.
+- Master login: same phone format + password + “Забыли пароль?”.
+- Master registration: profile name, city, required address, optional/auto district, multi-select categories.
+- Master dashboard greeting uses personal name; client cards/public profile use profile name.
+- Test OTP is still 111111 until NIKITA SMS is connected.
+- Supabase schema updated with profiles.city, master_profiles.city/categories/profile_name.

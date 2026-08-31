@@ -59,6 +59,8 @@ function applyMasterProSyncToClientHome(){
        master.district=p.address;
      }
      if(p.address)master.address=p.address;
+     if(Number.isFinite(Number(p.lat)))master.lat=Number(p.lat);
+     if(Number.isFinite(Number(p.lng)))master.lng=Number(p.lng);
      if(p.about)master.desc=p.about;
      if(Array.isArray(p.works)){
        master.gallery=[...p.works];
@@ -567,10 +569,11 @@ function renderUpcomingBooking(){
   return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div><div class="booking-home-actions"><a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>${(!confirmed&&!cancelled&&!expired)?`<button class="ghost" onclick="confirmBookingDemo('${id}')">Демо: подтвердить</button>`:''}${(confirmed&&!expired)?`<button class="ghost" onclick="pnCompleteBookingDemo('${id}')">Демо: процедура завершена</button>`:''}</div><p class="booking-home-note">${cancelled?'Мастер отклонил эту запись. В чате есть автоматическое сообщение от мастера.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Можно написать мастеру сразу, пока заявка ожидает подтверждения.'}</p></article>`
  }).join('')}</div>`;
 }
-function confirmBookingDemo(id){
+async function confirmBookingDemo(id){
  const list=getBookings();
  const b=list.find(x=>String(x.id)===String(id));
  if(!b)return;
+ try{if(window.PNData&&b.syncedToSupabase)await window.PNData.updateBookingStatus(id,'approved')}catch(e){alert('Не удалось обновить запись в базе: '+e.message);return}
  b.status='confirmed';
  localStorage.setItem('pn_bookings',JSON.stringify(list));
  const m=masters[b.master]||masters[0];
@@ -808,7 +811,7 @@ async function pnRefreshClientAccount(){
 window.addEventListener('DOMContentLoaded',()=>pnRefreshClientAccount());
 window.addEventListener('pageshow',()=>pnRefreshClientAccount());
 
-/* v108 — post-service rating popup (test version) */
+/* v109 — post-service rating popup + Supabase */
 function pnReviewKey(){return 'pn_verified_reviews'}
 function pnHasReview(bookingId){
  try{return (JSON.parse(localStorage.getItem(pnReviewKey())||'[]')||[]).some(r=>String(r.bookingId)===String(bookingId))}catch(e){return false}
@@ -818,9 +821,6 @@ function pnBookingFinished(b){
  if(b.status==='completed'||b.status==='done') return true;
  const dt=bookingDateTime(b);
  return b.status==='confirmed' && dt && Date.now()>=dt.getTime();
-}
-function pnReadPhotos(files){
- return Promise.all([...files].slice(0,3).map(file=>new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>resolve(null);r.readAsDataURL(file)}))).then(x=>x.filter(Boolean));
 }
 function pnOpenRatingPopup(booking){
  if(!booking || pnHasReview(booking.id) || document.getElementById('pnRatingOverlay')) return;
@@ -838,27 +838,76 @@ function pnOpenRatingPopup(booking){
    <button class="pn-rating-submit" disabled>Отправить оценку</button>
    <button class="pn-rating-later">Не сейчас</button>
  </div>`;
- document.body.appendChild(ov);let rating=0,photos=[];
+ document.body.appendChild(ov);let rating=0,files=[];
  const stars=[...ov.querySelectorAll('.pn-rating-stars button')],submit=ov.querySelector('.pn-rating-submit');
  stars.forEach(btn=>btn.onclick=()=>{rating=Number(btn.dataset.rate);stars.forEach((s,i)=>s.classList.toggle('active',i<rating));submit.disabled=false;ov.querySelector('.pn-rating-hint').textContent=['','Плохо','Ниже ожиданий','Нормально','Хорошо','Отлично!'][rating]});
- ov.querySelector('input[type=file]').onchange=async e=>{photos=await pnReadPhotos(e.target.files);ov.querySelector('.pn-rating-previews').innerHTML=photos.map(x=>`<img src="${x}" alt="Фото отзыва">`).join('')};
+ ov.querySelector('input[type=file]').onchange=e=>{
+   files=[...e.target.files].slice(0,3);
+   ov.querySelector('.pn-rating-previews').innerHTML=files.map(f=>`<img src="${URL.createObjectURL(f)}" alt="Фото отзыва">`).join('');
+ };
  const close=()=>ov.remove();ov.querySelector('.pn-rating-close').onclick=close;ov.querySelector('.pn-rating-later').onclick=close;
- submit.onclick=()=>{
+ submit.onclick=async()=>{
    if(!rating)return;
-   const all=JSON.parse(localStorage.getItem(pnReviewKey())||'[]');
-   const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
-   all.unshift({id:'review_'+Date.now(),bookingId:booking.id,clientId:user.id||user.phone||'test-client',masterId:Number(booking.master)||0,name:user.name||booking.clientName||'Клиент',service:booking.service||'Услуга',rating,text:ov.querySelector('.pn-rating-comment').value.trim(),photos:photos.slice(0,3),date:new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true});
-   localStorage.setItem(pnReviewKey(),JSON.stringify(all));
-   booking.reviewed=true;const list=getBookings();const found=list.find(x=>String(x.id)===String(booking.id));if(found)found.reviewed=true;localStorage.setItem('pn_bookings',JSON.stringify(list));
-   ov.querySelector('.pn-rating-sheet').innerHTML='<div class="pn-rating-thanks"><div>✓</div><h2>Спасибо за оценку!</h2><p>Ваш отзыв поможет другим выбрать мастера.</p></div>';setTimeout(close,1200);
+   submit.disabled=true;submit.textContent='Сохраняем…';
+   try{
+     if(!window.PNData||!booking.syncedToSupabase)throw new Error('Эта запись ещё не синхронизирована с базой');
+     const saved=await window.PNData.createReview({bookingId:booking.id,legacyMasterId:Number(booking.master)||0,rating,text:ov.querySelector('.pn-rating-comment').value.trim(),files});
+     const all=JSON.parse(localStorage.getItem(pnReviewKey())||'[]');
+     const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
+     all.unshift({id:saved.id,bookingId:booking.id,clientId:user.id,masterId:Number(booking.master)||0,name:user.name||booking.clientName||'Клиент',service:booking.service||'Услуга',rating:saved.rating,text:saved.text||'',photos:saved.photos||[],date:new Date(saved.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,syncedToSupabase:true});
+     localStorage.setItem(pnReviewKey(),JSON.stringify(all));
+     booking.reviewed=true;const list=getBookings();const found=list.find(x=>String(x.id)===String(booking.id));if(found)found.reviewed=true;localStorage.setItem('pn_bookings',JSON.stringify(list));
+     ov.querySelector('.pn-rating-sheet').innerHTML='<div class="pn-rating-thanks"><div>✓</div><h2>Спасибо за оценку!</h2><p>Отзыв сохранён в ProfiNavi.</p></div>';setTimeout(close,1200);
+   }catch(e){alert('Не удалось сохранить отзыв: '+e.message);submit.disabled=false;submit.textContent='Отправить оценку'}
  };
 }
 function pnCheckPendingReview(){
  const b=getBookings().filter(x=>pnBookingFinished(x)&&!x.reviewed&&!pnHasReview(x.id)).sort((a,b)=>(bookingDateTime(b)?.getTime()||0)-(bookingDateTime(a)?.getTime()||0))[0];
  if(b)setTimeout(()=>pnOpenRatingPopup(b),500);
 }
-function pnCompleteBookingDemo(id){
- const list=getBookings(),b=list.find(x=>String(x.id)===String(id));if(!b)return;b.status='completed';localStorage.setItem('pn_bookings',JSON.stringify(list));renderUpcomingBooking();pnOpenRatingPopup(b);
+async function pnCompleteBookingDemo(id){
+ const list=getBookings(),b=list.find(x=>String(x.id)===String(id));if(!b)return;
+ try{if(window.PNData&&b.syncedToSupabase)await window.PNData.updateBookingStatus(id,'completed')}catch(e){alert('Не удалось завершить запись в базе: '+e.message);return}
+ b.status='completed';localStorage.setItem('pn_bookings',JSON.stringify(list));renderUpcomingBooking();pnOpenRatingPopup(b);
 }
 window.addEventListener('DOMContentLoaded',pnCheckPendingReview);
 window.addEventListener('pageshow',pnCheckPendingReview);
+
+/* v109 — restore client bookings/reviews from Supabase on another browser/device */
+async function pnHydrateClientData(){
+ try{
+  if(!window.PNAuth||!window.PNData)return;
+  const user=await PNAuth.syncLocalUser();if(!user)return;
+  const [rows,reviews]=await Promise.all([PNData.listBookings(),PNData.listMyReviews()]);
+  const reviewedIds=new Set((reviews||[]).map(r=>String(r.booking_id)));
+  const mapped=(rows||[]).map(r=>{
+   const dt=new Date(r.starts_at);const status=r.status==='approved'?'confirmed':r.status==='declined'?'cancelled':r.status;
+   return {id:r.id,master:Number(r.legacy_master_id)||0,masterName:r.master_name||'',service:r.service_name||'Услуга',date:dt.toISOString(),dateText:dt.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}),time:dt.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status,clientName:user.name||'Клиент ProfiNavi',createdAt:r.created_at,syncedToSupabase:true,reviewed:reviewedIds.has(String(r.id))};
+  });
+  localStorage.setItem('pn_bookings',JSON.stringify(mapped));
+  const localReviews=(reviews||[]).map(r=>({id:r.id,bookingId:r.booking_id,clientId:user.id,masterId:Number(r.legacy_master_id)||0,name:user.name||'Клиент',rating:r.rating,text:r.text||'',photos:r.photos||[],date:new Date(r.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,syncedToSupabase:true}));
+  localStorage.setItem('pn_verified_reviews',JSON.stringify(localReviews));
+  renderUpcomingBooking();pnCheckPendingReview();
+ }catch(e){console.warn('ProfiNavi Supabase sync:',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydrateClientData,80));
+window.addEventListener('pageshow',()=>setTimeout(pnHydrateClientData,80));
+
+
+async function pnRefreshVisibleMaps(){
+  if(!window.PNMap)return;
+  const cp=PNMap.getCustomMaster();
+  if(!cp)return;
+  const lat=Number(cp.lat??cp.latitude),lng=Number(cp.lng??cp.longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+  // Update in-memory master 0 used by existing home map.
+  if(window.masters&&masters[0]){masters[0].lat=lat;masters[0].lng=lng;masters[0].address=cp.address||masters[0].address;masters[0].district=cp.area||masters[0].district;}
+  // Re-render any dedicated master map blocks.
+  document.querySelectorAll('[data-master-map]').forEach(el=>{
+    const id=Number(el.dataset.masterMap||0);
+    const m=(window.masters||[]).find(x=>Number(x.id)===id)||(window.masters||[])[id];
+    PNMap.render(el,m,15);
+  });
+}
+window.addEventListener('load',()=>setTimeout(pnRefreshVisibleMaps,250));
+window.addEventListener('pageshow',()=>setTimeout(pnRefreshVisibleMaps,250));

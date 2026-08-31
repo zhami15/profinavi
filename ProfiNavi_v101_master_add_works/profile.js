@@ -25,6 +25,8 @@ try{
   if(cp.experience) masters[0].experience=cp.experience;
   if(cp.about) masters[0].desc=cp.about;
   if(cp.avatar) masters[0].avatar=cp.avatar;
+  if(Number.isFinite(Number(cp.lat))) masters[0].lat=Number(cp.lat);
+  if(Number.isFinite(Number(cp.lng))) masters[0].lng=Number(cp.lng);
   if(Array.isArray(cp.works)&&cp.works.length) masters[0].gallery=cp.works;
  }
 }catch(e){}
@@ -315,3 +317,16 @@ window.addEventListener('storage',e=>{
     location.reload();
   }
 });
+
+
+async function pnRenderProfileAddressMap(){
+  const el=document.getElementById('masterAddressMap'); if(!el||!window.PNMap)return;
+  let m=null;
+  try{
+    const id=Number(new URLSearchParams(location.search).get('id')||localStorage.getItem('selectedMasterId')||0);
+    m=(window.masters||[]).find(x=>Number(x.id)===id)||(window.masters||[])[id]||(window.masters||[])[0];
+  }catch(e){m=(window.masters||[])[0]}
+  await PNMap.render(el,m,15);
+}
+window.addEventListener('load',()=>setTimeout(pnRenderProfileAddressMap,150));
+window.addEventListener('pageshow',()=>setTimeout(pnRenderProfileAddressMap,150));

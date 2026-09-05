@@ -86,11 +86,36 @@
       is_published:!!profile.is_published,rankingBreakdown:profile.ranking_breakdown||{}
     };
   }
+  function hydrateCached(target){
+    let count=0;
+    try{
+      Object.keys(localStorage).filter(k=>k.startsWith('pn_dynamic_master_')).forEach(k=>{
+        try{
+          const m=JSON.parse(localStorage.getItem(k)||'null');
+          if(m&&m._backend&&Number.isFinite(Number(m.id))){target[Number(m.id)]=m;count++}
+        }catch(e){}
+      });
+    }catch(e){}
+    return count;
+  }
   async function hydrate(target){
+    const cachedCount=hydrateCached(target);
     if(!window.PNData?.listPublicDirectory)return target;
-    const rows=await window.PNData.listPublicDirectory();
-    for(const x of rows){const m=fromBundle(x.profile,x.services,x.works,x.slots);if(m){target[m.id]=m;try{localStorage.setItem(`pn_dynamic_master_${m.id}`,JSON.stringify(m))}catch(e){}}}
-    return target;
+    try{
+      const rows=await window.PNData.listPublicDirectory();
+      const liveIds=new Set();
+      for(const x of rows){
+        const m=fromBundle(x.profile,x.services,x.works,x.slots);
+        if(m){liveIds.add(Number(m.id));target[m.id]=m;try{localStorage.setItem(`pn_dynamic_master_${m.id}`,JSON.stringify(m))}catch(e){}}
+      }
+      // Network response is authoritative: remove stale unpublished/blocked dynamic profiles.
+      Object.keys(target).forEach(k=>{const m=target[k];if(m?._backend&&!liveIds.has(Number(m.id)))delete target[k]});
+      try{Object.keys(localStorage).filter(k=>k.startsWith('pn_dynamic_master_')).forEach(k=>{const id=Number(k.replace('pn_dynamic_master_',''));if(Number.isFinite(id)&&!liveIds.has(id))localStorage.removeItem(k)})}catch(e){}
+      return target;
+    }catch(error){
+      if(cachedCount){console.warn('Public directory network refresh failed; using cached masters',error);return target}
+      throw error;
+    }
   }
   window.PNRanking={ageDays,explorationRate,isNew,ratingLabel,ratingHtml,rank,fromBundle,hydrate};
 })();

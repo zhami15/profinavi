@@ -558,12 +558,27 @@ function isChatExpired(b){const dt=bookingDateTime(b);return dt?Date.now()>=dt.g
 function getBooking(){return getBookings()[0]||null}
 function saveBooking(b){const list=getBookings();list.unshift(b);saveBookings(list)}
 function updateBookingStatus(id,status){const list=getBookings();const b=list.find(x=>x.id===id);if(!b)return;b.status=status;saveBookings(list)}
+function pnMasterForBooking(b){
+ const id=Number(b?.master);
+ let m=Number.isFinite(id)?masters[id]:null;
+ if(!m&&Number.isFinite(id)){
+  try{m=JSON.parse(localStorage.getItem(`pn_dynamic_master_${id}`)||'null')}catch(e){}
+ }
+ return m||{
+  id:Number.isFinite(id)?id:0,
+  name:b?.masterName||'Мастер ProfiNavi',
+  avatar:'icon-192.png',
+  district:'',
+  rating:0,
+  experience:''
+ };
+}
 function renderUpcomingBooking(){
  const box=document.getElementById('upcomingBooking'); if(!box)return;
  const bookings=getBookings().slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
  if(!bookings.length){box.innerHTML=`<article class="booking-home-card empty"><div><p class="booking-home-kicker">Мои записи</p><h3 style="margin:0 0 5px">Пока нет ближайших записей</h3><p style="margin:0;color:#766b70">Можно записываться к разным мастерам и на несколько услуг.</p></div><div class="booking-home-empty-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="15" rx="3"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg></div></article>`;return}
  box.innerHTML=`<div class="booking-list-wrap"><div class="booking-list-title"><p class="booking-home-kicker">Мои записи</p><span>${bookings.length}</span></div>${bookings.map((b,idx)=>{
-  const m=masters[b.master]||masters[0];
+  const m=pnMasterForBooking(b);
   const confirmed=b.status==='confirmed'||b.status==='completed'||b.status==='done';
   const cancelled=b.status==='cancelled';
   const id=b.id||String(idx);
@@ -575,9 +590,11 @@ function renderUpcomingBooking(){
  }).join('')}</div>`;
 }
 
-render();
-renderUpcomingBooking();
-updateChatBadge();
+// v137: startup rendering must never abort the rest of script.js.
+// Real masters load asynchronously from Supabase; bookings can already exist locally.
+try{render()}catch(e){console.error('Initial directory render:',e)}
+try{renderUpcomingBooking()}catch(e){console.error('Initial booking render:',e)}
+try{updateChatBadge()}catch(e){console.error('Initial chat badge render:',e)}
 
 // Bottom tabs: Home / Search / Работы / Message
 function setBottomActive(id){

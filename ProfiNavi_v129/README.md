@@ -1,4 +1,4 @@
-# ProfiNavi v134 — Admin
+# ProfiNavi v136 — Technical support chat
 
 ## Admin panel
 
@@ -136,3 +136,9 @@ Test OTP while `PN_TEST_MODE=true`: `111111`
 - Logout revokes the Supabase session and clears user-specific local caches (bookings, chats, reviews, favorites and auth-bound master caches) without deleting server data.
 - Client registration preserves an existing profile role instead of forcing `client`.
 - Visiting client-login while already authenticated returns to the client app unless `?force=1` is supplied.
+## v136 — Technical Support
+- Added one persistent support thread per authenticated account (`support_threads`).
+- Added immutable support messages (`support_messages`) and per-user read state (`support_reads`).
+- Client and master chat lists show “Техническая поддержка” as a regular dialog.
+- Admin has `admin-support.html` inbox and `admin-support-chat.html` reply screen.
+- Support data is stored in Supabase and syncs across devices; it is not limited by booking chat 72-hour rules.

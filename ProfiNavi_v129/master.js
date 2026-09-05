@@ -41,6 +41,8 @@ const MASTER_KEY='pn_master_session';
 const SERVICE_KEY='pn_master_services_0';
 const SLOT_KEY='pn_master_slots';
 const CHAT_KEY='pn_chats';
+let masterSupportState={lastMessage:null,unreadCount:0};
+async function pnHydrateMasterSupport(){try{if(!window.PNData||!window.PNAuth)return masterSupportState;const u=await PNAuth.currentUser();if(!u){masterSupportState={lastMessage:null,unreadCount:0};localStorage.setItem('pn_support_unread','0');return masterSupportState}const s=await PNData.getSupportSummary();masterSupportState={lastMessage:s?.lastMessage||null,unreadCount:Number(s?.unreadCount||0)};localStorage.setItem('pn_support_unread',masterSupportState.unreadCount?'1':'0');return masterSupportState}catch(e){console.warn('master support',e);return masterSupportState}}
 
 const MASTER_READ_AT_KEY='pn_master_chat_read_at_v49';
 function getMasterReadAt(){return jget(MASTER_READ_AT_KEY,{})}
@@ -56,7 +58,7 @@ function masterChatUnread(id){
  return !!(lastClient && Number(lastClient.ts||0)>Number(getMasterReadAt()[String(id)]||0));
 }
 function masterUnreadCount(){
- return getBookings().filter(b=>masterChatUnread(b.id)).length;
+ return getBookings().filter(b=>masterChatUnread(b.id)).length+(masterSupportState.unreadCount>0?1:0);
 }
 function bookingEndAt(b){
  if(!b?.date)return null;
@@ -559,8 +561,15 @@ function renderChats(){
    if(au!==bu)return bu-au;
    return new Date(b.createdAt||b.date).getTime()-new Date(a.createdAt||a.date).getTime();
  });
+ const supportUnread=masterSupportState.unreadCount>0;
+ const supportText=String(masterSupportState.lastMessage?.body||'Напишите нам, если возник вопрос или проблема').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  root.innerHTML=`${masterHeader('Чаты','')}
  <section class="master-chat-list">
+ <button class="master-chat-item chat-button support-master-chat ${supportUnread?'is-unread':''}" onclick="location.href='support-chat.html?return=master-chats.html'">
+   <div class="master-client-avatar support-avatar-mini"><img src="icon-192.png" alt="ProfiNavi"></div>
+   <div><b>Техническая поддержка</b><p>${supportText}</p><small>ProfiNavi · помощь по работе сервиса</small></div>
+   <span class="chat-row-end">${supportUnread?'<i class="master-unread-badge">1</i>':''}<em>›</em></span>
+ </button>
  ${rows.length?rows.map(b=>{
    const msgs=chats[String(b.id)]||[],last=msgs[msgs.length-1],unread=masterChatUnread(b.id),expired=masterChatExpired(b);
    return `<button class="master-chat-item chat-button ${unread?'is-unread':''}" onclick="openChat('${b.id}')">
@@ -572,7 +581,7 @@ function renderChats(){
      </div>
      <span class="chat-row-end">${unread?'<i class="master-unread-badge">1</i>':''}<em>›</em></span>
    </button>`;
- }).join(''):'<div class="master-empty">Пока нет чатов</div>'}
+ }).join(''):'<div class="master-chat-hint">Диалоги с клиентами появятся здесь после подтверждения записи.</div>'}
  </section>${nav('chats')}`;
 }
 function editProfile(){
@@ -1280,11 +1289,11 @@ document.addEventListener('click',e=>{
   }
 });
 
-window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await PNBackendSync.hydrateMasterCache();const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
+window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await Promise.all([PNBackendSync.hydrateMasterCache(),pnHydrateMasterSupport()]);const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
 window.addEventListener('DOMContentLoaded',()=>{
  if(window.PNRealtime)PNRealtime.watchMaster(async()=>{
   try{
-   await PNBackendSync?.hydrateMasterCache?.();
+   await Promise.all([PNBackendSync?.hydrateMasterCache?.(),pnHydrateMasterSupport()]);
    const f=location.pathname.split('/').pop();
    if(f==='master.html')renderDashboard();
    else if(f==='master-profile.html')renderProfile();

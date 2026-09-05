@@ -325,11 +325,13 @@ function updateChatBadge(){
  const bookings=(JSON.parse(localStorage.getItem('pn_bookings')||'[]')||[]);
  const validIds=new Set((Array.isArray(bookings)?bookings:[]).map(b=>String(b.id)).filter(Boolean));
 
- const count=[...validIds].filter(id=>{
+ const bookingUnread=[...validIds].filter(id=>{
    const msgs=chats[id]||[];
    const lastMaster=[...msgs].reverse().find(x=>x.from==='master');
    return !!(lastMaster && Number(lastMaster.ts||0)>Number(reads[id]||0));
  }).length;
+ const supportUnread=localStorage.getItem('pn_support_unread')==='1'?1:0;
+ const count=bookingUnread+supportUnread;
 
  const badge=document.getElementById('chatNavBadge');
  if(badge){
@@ -870,6 +872,17 @@ window.addEventListener('DOMContentLoaded',pnCheckPendingReview);
 window.addEventListener('pageshow',pnCheckPendingReview);
 
 /* v109 — restore client bookings/reviews from Supabase on another browser/device */
+async function pnHydrateSupportUnread(){
+ try{
+  if(!window.PNAuth||!window.PNData)return;
+  const u=await PNAuth.currentUser();
+  if(!u){localStorage.setItem('pn_support_unread','0');updateChatBadge();return}
+  const s=await PNData.getSupportSummary();localStorage.setItem('pn_support_unread',s?.unreadCount?'1':'0');updateChatBadge();
+ }catch(e){console.warn('Support unread sync:',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydrateSupportUnread,100));
+window.addEventListener('pageshow',()=>setTimeout(pnHydrateSupportUnread,100));
+
 async function pnHydrateClientData(){
  try{
   if(!window.PNAuth||!window.PNData)return;
@@ -910,7 +923,7 @@ window.addEventListener('pageshow',()=>setTimeout(pnRefreshVisibleMaps,250));
 
 window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().catch(()=>{}));
 
-window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>pnHydrateClientData().catch(()=>{})));
+window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>Promise.all([pnHydrateClientData(),pnHydrateSupportUnread()]).catch(()=>{})));
 
 async function pnHydratePublicMasterHome(){
  try{const b=await window.PNBackendSync?.hydratePublicMasterCache?.(0);if(!b)return;applyMasterProSyncToClientHome();render();renderUpcomingBooking();updateStats();}catch(e){console.warn('public master sync',e)}

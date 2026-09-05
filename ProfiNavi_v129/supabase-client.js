@@ -95,7 +95,7 @@ window.PNAuth={
     'pn_master_chat_read_at','pn_master_chat_unread','pn_master_chats',
     'pn_master_backend_reviews','pn_master_cache_owner','pn_master_session',
     'pn_master_profile_0','pn_master_services_0','pn_master_slots','pn_master_schedule_config',
-    'pn_master_feed_works'
+    'pn_master_feed_works','pn_support_unread'
   ];
   exact.forEach(k=>localStorage.removeItem(k));
   Object.keys(localStorage).forEach(k=>{if(k.startsWith('pn_chat_'))localStorage.removeItem(k)});
@@ -270,6 +270,37 @@ Object.assign(window.PNData,{
  async listMessages(id){const {data,error}=await pnSupabase.from('messages').select('*').eq('conversation_id',id).order('created_at');if(error)throw error;return data||[]},
  async sendMessage(id,body){const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');const {data,error}=await pnSupabase.from('messages').insert({conversation_id:id,sender_id:user.id,body:text}).select().single();if(error)throw error;return data},
  async markConversationRead(id){const user=await PNAuth.currentUser();if(!user)return;const {error}=await pnSupabase.from('conversation_reads').upsert({conversation_id:id,user_id:user.id,last_read_at:new Date().toISOString()},{onConflict:'conversation_id,user_id'});if(error)throw error},
+ async getSupportThread(create=false){
+  const user=await PNAuth.currentUser();if(!user)return null;
+  let {data,error}=await pnSupabase.from('support_threads').select('*').eq('user_id',user.id).maybeSingle();if(error)throw error;
+  if(data||!create)return data||null;
+  const created=await pnSupabase.from('support_threads').insert({user_id:user.id}).select().single();
+  if(created.error){
+   if(created.error.code!=='23505')throw created.error;
+   const retry=await pnSupabase.from('support_threads').select('*').eq('user_id',user.id).maybeSingle();if(retry.error)throw retry.error;return retry.data||null;
+  }
+  return created.data;
+ },
+ async listSupportMessages(threadId){
+  if(!threadId)return[];const {data,error}=await pnSupabase.from('support_messages').select('*').eq('thread_id',threadId).order('created_at');if(error)throw error;return data||[];
+ },
+ async sendSupportMessage(threadId,body){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');
+  const {data,error}=await pnSupabase.from('support_messages').insert({thread_id:threadId,sender_id:user.id,body:text}).select().single();if(error)throw error;return data;
+ },
+ async markSupportRead(threadId){
+  const user=await PNAuth.currentUser();if(!user||!threadId)return;const {error}=await pnSupabase.from('support_reads').upsert({thread_id:threadId,user_id:user.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(error)throw error;
+ },
+ async getSupportSummary(){
+  const user=await PNAuth.currentUser();if(!user)return{thread:null,lastMessage:null,unreadCount:0};const thread=await this.getSupportThread(false);if(!thread)return{thread:null,lastMessage:null,unreadCount:0};
+  const [lastRes,readRes]=await Promise.all([
+   pnSupabase.from('support_messages').select('*').eq('thread_id',thread.id).order('created_at',{ascending:false}).limit(1),
+   pnSupabase.from('support_reads').select('last_read_at').eq('thread_id',thread.id).eq('user_id',user.id).maybeSingle()
+  ]);if(lastRes.error)throw lastRes.error;if(readRes.error)throw readRes.error;
+  const lastRead=readRes.data?.last_read_at||'1970-01-01T00:00:00.000Z';
+  const countRes=await pnSupabase.from('support_messages').select('id',{count:'exact',head:true}).eq('thread_id',thread.id).neq('sender_id',user.id).gt('created_at',lastRead);if(countRes.error)throw countRes.error;
+  return{thread,lastMessage:(lastRes.data||[])[0]||null,unreadCount:Number(countRes.count||0)};
+ },
  async listLegacyFavorites(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('legacy_favorites').select('legacy_master_id').eq('client_id',user.id);if(error)throw error;return(data||[]).map(x=>Number(x.legacy_master_id))},
  async setLegacyFavorite(id,on){const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');id=Number(id);if(on){const {error}=await pnSupabase.from('legacy_favorites').upsert({client_id:user.id,legacy_master_id:id},{onConflict:'client_id,legacy_master_id'});if(error)throw error}else{const {error}=await pnSupabase.from('legacy_favorites').delete().eq('client_id',user.id).eq('legacy_master_id',id);if(error)throw error}return true}
 });
@@ -312,7 +343,9 @@ window.PNRealtime={
    const b=pnSupabase.channel('pn-client-bookings').on('postgres_changes',{event:'*',schema:'public',table:'bookings',filter:`client_id=eq.${user.id}`},()=>onChange?.('bookings')).subscribe();
    const c=pnSupabase.channel('pn-client-conversations').on('postgres_changes',{event:'*',schema:'public',table:'conversations',filter:`client_id=eq.${user.id}`},()=>onChange?.('conversations')).subscribe();
    const m=pnSupabase.channel('pn-client-messages').on('postgres_changes',{event:'*',schema:'public',table:'messages'},()=>onChange?.('messages')).subscribe();
-   this.channels.push(b,c,m);
+   const st=pnSupabase.channel('pn-client-support-threads').on('postgres_changes',{event:'*',schema:'public',table:'support_threads',filter:`user_id=eq.${user.id}`},()=>onChange?.('support')).subscribe();
+   const sm=pnSupabase.channel('pn-client-support-messages').on('postgres_changes',{event:'*',schema:'public',table:'support_messages'},()=>onChange?.('support')).subscribe();
+   this.channels.push(b,c,m,st,sm);
   }).catch(()=>{});
  },
  watchMaster(onChange){
@@ -323,7 +356,9 @@ window.PNRealtime={
    const b=pnSupabase.channel('pn-master-bookings').on('postgres_changes',{event:'*',schema:'public',table:'bookings',filter:`master_id=eq.${user.id}`},()=>onChange?.('bookings')).subscribe();
    const c=pnSupabase.channel('pn-master-conversations').on('postgres_changes',{event:'*',schema:'public',table:'conversations',filter:`master_id=eq.${user.id}`},()=>onChange?.('conversations')).subscribe();
    const m=pnSupabase.channel('pn-master-messages').on('postgres_changes',{event:'*',schema:'public',table:'messages'},()=>onChange?.('messages')).subscribe();
-   this.channels.push(b,c,m);
+   const st=pnSupabase.channel('pn-master-support-threads').on('postgres_changes',{event:'*',schema:'public',table:'support_threads',filter:`user_id=eq.${user.id}`},()=>onChange?.('support')).subscribe();
+   const sm=pnSupabase.channel('pn-master-support-messages').on('postgres_changes',{event:'*',schema:'public',table:'support_messages'},()=>onChange?.('support')).subscribe();
+   this.channels.push(b,c,m,st,sm);
   }).catch(()=>{});
  }
 };

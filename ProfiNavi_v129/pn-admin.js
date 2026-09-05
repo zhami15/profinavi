@@ -97,6 +97,25 @@
     const up=await sb.from('master_profiles').update({schedule_config:scheduleConfig,updated_at:new Date().toISOString()}).eq('user_id',uid);if(up.error)throw up.error;
     await log(uid,'schedule_replace','availability',null,{count:(beforeRes.data||[]).length},{count:inserted.length,start,end,step:stepMin,daysAhead:ahead,weekdays});return inserted;
   }
+  async function listSupportThreads(){
+    const u=await ensureRole();const tr=await sb.from('support_threads').select('*').not('last_message_at','is',null).order('last_message_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});if(tr.error)throw tr.error;
+    const threads=tr.data||[],ids=threads.map(x=>x.id),userIds=threads.map(x=>x.user_id);if(!threads.length)return[];
+    const [pr,ms,rd]=await Promise.all([
+      sb.from('profiles').select('id,name,phone,role').in('id',userIds),
+      sb.from('support_messages').select('*').in('thread_id',ids).order('created_at'),
+      sb.from('support_reads').select('*').eq('user_id',u.id).in('thread_id',ids)
+    ]);for(const r of [pr,ms,rd])if(r.error)throw r.error;
+    const contacts=Object.fromEntries((pr.data||[]).map(x=>[x.id,x])),reads=Object.fromEntries((rd.data||[]).map(x=>[x.thread_id,x.last_read_at]));
+    const byThread={};for(const m of ms.data||[])(byThread[m.thread_id]||(byThread[m.thread_id]=[])).push(m);
+    return threads.map(th=>{const messages=byThread[th.id]||[],last=messages[messages.length-1]||null,lastRead=reads[th.id]||'1970-01-01T00:00:00.000Z';const unread=messages.filter(m=>m.sender_id!==u.id&&m.created_at>lastRead).length;return{...th,contact:contacts[th.user_id]||null,lastMessage:last,unreadCount:unread}});
+  }
+  async function loadSupportThread(threadId){
+    const u=await ensureRole();const th=await sb.from('support_threads').select('*').eq('id',threadId).maybeSingle();if(th.error)throw th.error;if(!th.data)throw new Error('Диалог поддержки не найден');
+    const [pr,ms]=await Promise.all([sb.from('profiles').select('id,name,phone,role').eq('id',th.data.user_id).maybeSingle(),sb.from('support_messages').select('*').eq('thread_id',threadId).order('created_at')]);if(pr.error)throw pr.error;if(ms.error)throw ms.error;
+    return{thread:th.data,contact:pr.data||null,messages:ms.data||[],admin:u};
+  }
+  async function sendSupportMessage(threadId,body){const u=await ensureRole();const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');const r=await sb.from('support_messages').insert({thread_id:threadId,sender_id:u.id,body:text}).select().single();if(r.error)throw r.error;return r.data}
+  async function markSupportRead(threadId){const u=await ensureRole();const r=await sb.from('support_reads').upsert({thread_id:threadId,user_id:u.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(r.error)throw r.error}
   async function logout(){await sb.auth.signOut({scope:'local'});location.replace('admin-login.html')}
-  window.PNAdmin={esc,normalizePhone,user,ensureRole,requireAdmin,listMasters,loadMaster,log,uploadMaster:(uid,file,kind)=>upload('master-media',uid,file,kind),uploadService:(uid,file)=>upload('service-media',uid,file,'service'),saveProfile,saveService,addService,addWork,deleteWork,replaceSchedule,logout};
+  window.PNAdmin={esc,normalizePhone,user,ensureRole,requireAdmin,listMasters,loadMaster,log,uploadMaster:(uid,file,kind)=>upload('master-media',uid,file,kind),uploadService:(uid,file)=>upload('service-media',uid,file,'service'),saveProfile,saveService,addService,addWork,deleteWork,replaceSchedule,listSupportThreads,loadSupportThread,sendSupportMessage,markSupportRead,logout};
 })();

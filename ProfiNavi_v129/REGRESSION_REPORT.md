@@ -1,4 +1,4 @@
-# ProfiNavi v138 stable clean — regression report
+# ProfiNavi v140 — regression + function integrity report
 
 ## Frontend/static
 
@@ -36,7 +36,7 @@
 
 ## Backend clean reset
 
-`profinavi_v138_clean_reset.sql` содержит в одном запуске:
+`profinavi_v138_clean_reset_FIXED_R2.sql` содержит в одном запуске:
 
 1. очистку всех старых `public`-данных ProfiNavi;
 2. очистку demo OTP request rows;

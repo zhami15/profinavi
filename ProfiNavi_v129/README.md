@@ -1,4 +1,4 @@
-# ProfiNavi v139 — master card click fix
+# ProfiNavi v140 — function integrity audit
 
 v138 — стабильная версия после полного регрессионного прохода и перехода на чистое состояние базы.
 
@@ -6,7 +6,7 @@ v138 — стабильная версия после полного регре�
 
 В Supabase нужно **один раз** выполнить:
 
-`profinavi_v138_clean_reset.sql`
+`profinavi_v138_clean_reset_FIXED_R2.sql`
 
 Этот файл:
 

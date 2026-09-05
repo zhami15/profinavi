@@ -1,9 +1,9 @@
-# Deploy ProfiNavi v138 stable — clean start
+# Deploy ProfiNavi v140 — clean-start compatible
 
 ## 1. Очистить и привести Supabase к v138
 
 1. Открой Supabase → SQL Editor → New query.
-2. Вставь **полное содержимое** `profinavi_v138_clean_reset.sql`.
+2. Вставь **полное содержимое** `profinavi_v138_clean_reset_FIXED_R2.sql`.
 3. Выполни запрос один раз.
 4. Он должен завершиться без ошибки.
 

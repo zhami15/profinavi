@@ -29,6 +29,16 @@ function scheduleView(){
  }
  return`<section class="admin-panel"><div class="admin-panel-head"><div><h2>Расписание</h2><p>Сейчас в базе: ${available} свободных из ${slots.length} будущих слотов</p></div></div><div class="admin-form-grid"><label>Начало<input id="schStart" type="time" value="${E(cfg.start||'10:00')}"></label><label>Конец<input id="schEnd" type="time" value="${E(cfg.end||'19:00')}"></label><label>Шаг, минут<select id="schStep"><option value="30" ${Number(cfg.step||60)===30?'selected':''}>30</option><option value="60" ${Number(cfg.step||60)===60?'selected':''}>60</option><option value="90" ${Number(cfg.step||60)===90?'selected':''}>90</option><option value="120" ${Number(cfg.step||60)===120?'selected':''}>120</option></select></label><label>Дней вперёд<input id="schDays" type="number" min="1" max="62" value="30"></label></div><div class="admin-weekdays">${[['1','Пн'],['2','Вт'],['3','Ср'],['4','Чт'],['5','Пт'],['6','Сб'],['0','Вс']].map(([v,l])=>`<label><input type="checkbox" data-weekday="${v}" ${selected.includes(Number(v))?'checked':''}> ${l}</label>`).join('')}</div><p class="admin-warning">Сохранение обновляет будущую сетку. Уже занятые времена база автоматически оставит недоступными.</p><button class="admin-primary" id="saveSchedule">Сохранить свободные окна</button><div id="scheduleMsg" class="admin-inline-msg"></div><div class="admin-slot-preview">${slotPreview(slots)}</div></section>`}
 
+function slotPreview(slots){
+ const map={};
+ (slots||[]).filter(x=>x.is_available).forEach(x=>{
+  const d=new Date(x.starts_at);if(Number.isNaN(d.getTime()))return;
+  const day=d.toLocaleDateString('ru-RU'),time=d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  (map[day]||(map[day]=[])).push(time);
+ });
+ return Object.entries(map).slice(0,10).map(([day,times])=>`<div><b>${E(day)}</b><span>${E(times.slice(0,8).join(', '))}${times.length>8?'…':''}</span></div>`).join('')||'<div class="admin-empty">Свободных окон нет</div>';
+}
+
 function auditView(){return`<section class="admin-panel"><h2>История действий администратора</h2><div class="admin-audit-list">${bundle.audit.length?bundle.audit.map(a=>`<article><b>${E(a.admin_name||'Admin')}</b><span>${E(a.action)} · ${E(a.entity_type)}</span><small>${new Date(a.created_at).toLocaleString('ru-RU')}</small></article>`).join(''):'<div class="admin-empty">История пока пустая</div>'}</div></section>`}
 function render(){if(!bundle)return;host.innerHTML=currentTab==='profile'?profileView():currentTab==='services'?serviceView():currentTab==='works'?worksView():currentTab==='schedule'?scheduleView():auditView();bind()}
 function msg(id,text,ok=true){const el=document.getElementById(id);if(el){el.textContent=text;el.className='admin-inline-msg '+(ok?'ok':'error')}}

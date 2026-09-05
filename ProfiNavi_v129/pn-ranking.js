@@ -61,7 +61,7 @@
   function normalizeService(s){
     const old=Number(s.price)||0,newPrice=s.new_price==null?null:Number(s.new_price);
     const final=Number.isFinite(newPrice)&&newPrice>=0&&newPrice<old?newPrice:old;
-    return {id:s.id,name:s.name||'Услуга',desc:s.description||'',price:`${final} сом`,oldPrice:old,newPrice:Number.isFinite(newPrice)?newPrice:null,time:s.duration_text||'',image:s.image_url||null,promo:s.promo_label||''};
+    return {id:s.id,name:s.name||'Услуга',desc:s.description||'',price:`${final} сом`,oldPrice:old,newPrice:Number.isFinite(newPrice)?newPrice:null,time:s.duration_text||'',durationMinutes:Number(s.duration_minutes)||window.PNDurationMinutes?.(s.duration_text,60)||60,image:s.image_url||null,promo:s.promo_label||''};
   }
   function fromBundle(profile,services=[],works=[],slots=[]){
     const id=Number(profile.legacy_id);
@@ -75,12 +75,14 @@
     const tomorrow=new Date(now);tomorrow.setDate(now.getDate()+1);const tomorrowKey=`${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
     const slotKeys=slots.map(x=>{const d=new Date(x.starts_at);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`});
     const available=[];if(slotKeys.includes(todayKey))available.push('today');if(slotKeys.includes(tomorrowKey))available.push('tomorrow');if(slots.length)available.push('week');
-    const slotMap={};slots.forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(slotMap[k]||(slotMap[k]=[])).push(t)});
+    const scheduleStep=Math.max(5,Number(profile.schedule_config?.step)||60);
+    const slotMap={},slotIntervals={};slots.forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(slotMap[k]||(slotMap[k]=[])).push(t);const start=d.getTime(),end=start+scheduleStep*60000;(slotIntervals[k]||(slotIntervals[k]=[])).push({start,end,time:t})});
+    Object.values(slotMap).forEach(a=>a.sort());Object.values(slotIntervals).forEach(a=>a.sort((x,y)=>x.start-y.start));
     return {
       id,_backend:true,user_id:profile.user_id,legacyId:id,
       name:profile.profile_name||'Мастер ProfiNavi',cat,categories:cats,
       district:[profile.area,profile.address].filter(Boolean).join(' · ')||profile.city||'Бишкек',area:profile.area||'',address:profile.address||'',walk:'на месте',
-      price,priceValue,available,slotMap,rating:Number(profile.rating)||0,reviewsCount:Number(profile.reviews_count)||0,ratingConfidence:Number(profile.rating_confidence)||0,topScore:Number(profile.top_score)||0,
+      price,priceValue,available,slotMap,slotIntervals,scheduleStep,rating:Number(profile.rating)||0,reviewsCount:Number(profile.reviews_count)||0,ratingConfidence:Number(profile.rating_confidence)||0,topScore:Number(profile.top_score)||0,
       createdAt:profile.created_at,isNew:ageDays(profile.created_at)<30,experience:profile.experience_text||'',saves:0,emoji:emojiMap[cat]||'✦',avatar,
       desc:profile.bio||'',about:profile.bio||'',lat:Number(profile.latitude)||42.8746,lng:Number(profile.longitude)||74.5698,bookingDays:60,services:sv.length?sv:[{name:'Услуга',desc:'',price:'0 сом',time:''}],gallery:gallery.length?gallery:[avatar],works:gallery,cover:profile.cover_url||gallery[0]||avatar,strengths:profile.strengths_tags||[],payment:profile.payment||'',locationInfo:profile.location_info||'',scheduleType:profile.schedule_config?.days||'Ежедневно',workDays:profile.schedule_config?.workDays||[],openTime:profile.schedule_config?.start||'10:00',closeTime:profile.schedule_config?.end||'19:00',
       is_published:!!profile.is_published,rankingBreakdown:profile.ranking_breakdown||{}

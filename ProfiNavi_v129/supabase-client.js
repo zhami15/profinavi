@@ -12,7 +12,27 @@ function pnPhone(contact){
  if(d.length===9)d='996'+d;
  return d?('+'+d):'';
 }
+function pnSafeReturnPath(value,fallback='client.html'){
+ const raw=String(value||'').trim();
+ if(!raw)return fallback;
+ if(raw.includes('\\')||raw.includes('..')||raw.startsWith('/')||raw.startsWith('//'))return fallback;
+ if(!/^[A-Za-z0-9][A-Za-z0-9._/-]*\.html(?:[?#][^\r\n]*)?$/.test(raw))return fallback;
+ return raw;
+}
+window.PNSafeReturnPath=pnSafeReturnPath;
 function pnCachedClient(){try{return JSON.parse(localStorage.getItem('pn_client_user')||'null')}catch{return null}}
+function pnDurationMinutes(value,fallback=60){
+ if(Number.isFinite(Number(value))&&String(value??'').trim()!=='')return Math.max(1,Math.round(Number(value)));
+ const raw=String(value||'').trim().toLowerCase().replace(',', '.');if(!raw)return fallback;
+ const clock=raw.match(/^(\d{1,2}):(\d{2})$/);if(clock)return Math.max(1,Number(clock[1])*60+Number(clock[2]));
+ let mins=0;
+ const h=raw.match(/(\d+(?:\.\d+)?)\s*(?:ч(?:ас(?:а|ов)?)?\.?|h(?:ours?)?)/);if(h)mins+=Number(h[1])*60;
+ const m=raw.match(/(\d+(?:\.\d+)?)\s*(?:мин(?:ут(?:а|ы)?)?\.?|m(?:in(?:utes?)?)?)/);if(m)mins+=Number(m[1]);
+ if(mins>0)return Math.max(1,Math.round(mins));
+ const plain=raw.match(/^(\d+(?:\.\d+)?)$/);if(plain)return Math.max(1,Math.round(Number(plain[1])));
+ return fallback;
+}
+window.PNDurationMinutes=pnDurationMinutes;
 
 function pnValidateImageFile(file,maxBytes=10*1024*1024){
  if(!file)throw new Error('Файл не выбран');
@@ -115,21 +135,26 @@ window.PNData={
   const user=await PNAuth.currentUser();if(!user)throw new Error('Сначала подтвердите номер телефона');
   const startsAt=new Date(input.startsAt),legacyId=Number(input.master)||0;
   if(Number.isNaN(startsAt.getTime()))throw new Error('Некорректная дата записи');
-  let masterId=null,serviceId=null,bookingPrice=Number(input.price)||0;
+  let masterId=null,serviceId=null,bookingPrice=Number(input.price)||0,durationMinutes=60;
   const {data:mp,error:mpError}=await pnSupabase.from('master_profiles').select('user_id,is_published').eq('legacy_id',legacyId).eq('is_published',true).maybeSingle();
   if(mpError)throw mpError;
   masterId=mp?.user_id||null;
   if(!masterId)throw new Error('Мастер не найден или профиль больше не опубликован.');
-  if(input.service){
-   const {data:sv,error:svError}=await pnSupabase.from('services').select('id,price,new_price').eq('master_id',masterId).eq('name',input.service).eq('is_active',true).limit(1).maybeSingle();
+  if(input.service||input.serviceId){
+   let q=pnSupabase.from('services').select('id,name,price,new_price,duration_minutes,duration_text').eq('master_id',masterId).eq('is_active',true);
+   q=input.serviceId?q.eq('id',input.serviceId):q.eq('name',input.service).limit(1);
+   const {data:sv,error:svError}=await q.maybeSingle();
    if(svError)throw svError;
    serviceId=sv?.id||null;
    if(!serviceId)throw new Error('Эта услуга больше недоступна. Обновите профиль мастера.');
    const base=Number(sv.price)||0,discount=sv.new_price==null?null:Number(sv.new_price);
    bookingPrice=Number.isFinite(discount)&&discount>=0&&discount<base?discount:base;
+   durationMinutes=pnDurationMinutes(sv.duration_minutes??sv.duration_text,60);
+   if(!input.service&&sv.name)input.service=sv.name;
   }
-  const payload={client_id:user.id,master_id:masterId,service_id:serviceId,legacy_master_id:legacyId,master_name:input.masterName||null,service_name:input.service||'Услуга',starts_at:startsAt.toISOString(),ends_at:null,price:bookingPrice,status:'pending',client_name:pnCachedClient()?.name||null};
-  const {data,error}=await pnSupabase.from('bookings').insert(payload).select('id,created_at,master_id').single();if(error)throw error;return data;
+  const endsAt=new Date(startsAt.getTime()+durationMinutes*60000);
+  const payload={client_id:user.id,master_id:masterId,service_id:serviceId,legacy_master_id:legacyId,master_name:input.masterName||null,service_name:input.service||'Услуга',starts_at:startsAt.toISOString(),ends_at:endsAt.toISOString(),duration_minutes:durationMinutes,price:bookingPrice,status:'pending',client_name:pnCachedClient()?.name||null};
+  const {data,error}=await pnSupabase.from('bookings').insert(payload).select('id,created_at,master_id,service_id,starts_at,ends_at,duration_minutes,price,status').single();if(error)throw error;return data;
  },
  async updateBookingStatus(id,status){
   const {data,error}=await pnSupabase.rpc('set_booking_status',{p_booking:id,p_status:status});if(error)throw error;return data;
@@ -158,7 +183,7 @@ window.PNData={
  },
  async listBookings(){
   const user=await PNAuth.currentUser();if(!user)return [];
-  const {data,error}=await pnSupabase.from('bookings').select('id,legacy_master_id,master_name,service_name,starts_at,status,created_at').eq('client_id',user.id).order('starts_at',{ascending:true});if(error)throw error;return data||[];
+  const {data,error}=await pnSupabase.from('bookings').select('id,legacy_master_id,master_name,service_name,service_id,starts_at,ends_at,duration_minutes,price,status,created_at').eq('client_id',user.id).order('starts_at',{ascending:true});if(error)throw error;return data||[];
  },
  async listMyReviews(){
   const user=await PNAuth.currentUser();if(!user)return [];
@@ -171,7 +196,7 @@ window.PNData={
   if(error)throw error;if(!profiles?.length)return [];
   const ids=profiles.map(x=>x.user_id);
   const [sv,wo,sl]=await Promise.all([
-    pnSupabase.from('services').select('id,master_id,name,description,price,new_price,promo_label,image_url,duration_text,is_active,sort_order').in('master_id',ids).eq('is_active',true).order('sort_order'),
+    pnSupabase.from('services').select('id,master_id,name,description,price,new_price,promo_label,image_url,duration_minutes,duration_text,is_active,sort_order').in('master_id',ids).eq('is_active',true).order('sort_order'),
     pnSupabase.from('works').select('id,master_id,image_url,caption,sort_order,created_at').in('master_id',ids).order('sort_order'),
     pnSupabase.from('availability_slots').select('master_id,starts_at,ends_at,is_available').in('master_id',ids).eq('is_available',true).gte('starts_at',new Date().toISOString()).lte('starts_at',new Date(Date.now()+14*86400000).toISOString()).order('starts_at')
   ]);
@@ -232,7 +257,7 @@ Object.assign(window.PNData,{
    experience_text:input.experience||null,strengths_tags:Array.isArray(input.strengths)?input.strengths:[],
    avatar_url:String(input.avatar||'').startsWith('http')?input.avatar:null,cover_url:String(input.cover||'').startsWith('http')?input.cover:null,
    payment:input.payment||null,location_info:input.locationInfo||null,
-   schedule_config:{days:input.scheduleType||'Ежедневно',workDays:input.workDays||[],start:input.openTime||'10:00',end:input.closeTime||'19:00'},updated_at:new Date().toISOString()};
+   schedule_config:{days:input.scheduleType||'Ежедневно',workDays:input.workDays||[],start:input.openTime||'10:00',end:input.closeTime||'19:00',step:Number(input.scheduleStep)||60},updated_at:new Date().toISOString()};
   const {data,error}=await pnSupabase.from('master_profiles').upsert(row,{onConflict:'user_id'}).select().single();if(error)throw error;return data;
  },
  async setMasterPublished(value){
@@ -244,7 +269,7 @@ Object.assign(window.PNData,{
   const {error:d}=await pnSupabase.from('services').delete().eq('master_id',uid);if(d)throw d;
   const rows=(items||[]).map((x,i)=>({master_id:uid,name:(x.name||'Услуга').trim(),description:x.desc||null,price:Number(x.price)||0,
    new_price:(x.newPrice!==undefined&&x.newPrice!==null&&String(x.newPrice)!=='')?Number(x.newPrice):null,promo_label:x.promo||null,
-   image_url:String(x.image||'').startsWith('http')?x.image:null,duration_text:x.time||null,is_active:true,sort_order:i}));
+   image_url:String(x.image||'').startsWith('http')?x.image:null,duration_text:x.time||null,duration_minutes:pnDurationMinutes(x.durationMinutes??x.time,60),is_active:true,sort_order:i}));
   if(!rows.length)return[];const {data,error}=await pnSupabase.from('services').insert(rows).select();if(error)throw error;return data||[];
  },
  async replaceMasterWorks(urls){
@@ -255,8 +280,13 @@ Object.assign(window.PNData,{
  },
  async replaceAvailability(slotMap){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;const today=new Date();today.setHours(0,0,0,0);
+  let step=60;
+  try{
+   const {data:mp}=await pnSupabase.from('master_profiles').select('schedule_config').eq('user_id',uid).maybeSingle();
+   step=Math.max(5,Number(mp?.schedule_config?.step)||Number(JSON.parse(localStorage.getItem('pn_master_schedule_config')||'{}')?.step)||60);
+  }catch(e){try{step=Math.max(5,Number(JSON.parse(localStorage.getItem('pn_master_schedule_config')||'{}')?.step)||60)}catch(_){}}
   const {error:d}=await pnSupabase.from('availability_slots').delete().eq('master_id',uid).gte('starts_at',today.toISOString());if(d)throw d;
-  const rows=[];Object.entries(slotMap||{}).forEach(([date,times])=>(times||[]).forEach(t=>{const [h,m]=String(t).split(':').map(Number);const st=new Date(date+'T00:00:00');st.setHours(h||0,m||0,0,0);rows.push({master_id:uid,starts_at:st.toISOString(),ends_at:new Date(st.getTime()+3600000).toISOString(),is_available:true})}));
+  const rows=[];Object.entries(slotMap||{}).forEach(([date,times])=>(times||[]).forEach(t=>{const [h,m]=String(t).split(':').map(Number);const st=new Date(date+'T00:00:00');st.setHours(h||0,m||0,0,0);rows.push({master_id:uid,starts_at:st.toISOString(),ends_at:new Date(st.getTime()+step*60000).toISOString(),is_available:true})}));
   if(!rows.length)return[];const {data,error}=await pnSupabase.from('availability_slots').insert(rows).select();if(error)throw error;return data||[];
  },
  async uploadMasterMedia(file,kind='work'){
@@ -305,11 +335,17 @@ Object.assign(window.PNData,{
  async setLegacyFavorite(id,on){const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');id=Number(id);if(on){const {error}=await pnSupabase.from('legacy_favorites').upsert({client_id:user.id,legacy_master_id:id},{onConflict:'client_id,legacy_master_id'});if(error)throw error}else{const {error}=await pnSupabase.from('legacy_favorites').delete().eq('client_id',user.id).eq('legacy_master_id',id);if(error)throw error}return true}
 });
 window.PNBackendSync={
+ async hydrateClientBookings(){
+  const user=await PNAuth.syncLocalUser();if(!user){localStorage.removeItem('pn_bookings');return[]}
+  const rows=await PNData.listBookings();
+  const mapped=(rows||[]).map(r=>{const dt=new Date(r.starts_at),status=r.status==='approved'?'confirmed':r.status==='declined'?'cancelled':r.status;return{id:r.id,master:Number(r.legacy_master_id)||0,masterName:r.master_name||'',service:r.service_name||'Услуга',serviceId:r.service_id||null,date:dt.toISOString(),endsAt:r.ends_at||null,durationMinutes:Number(r.duration_minutes)||null,price:Number(r.price)||0,dateText:dt.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}),time:dt.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status,clientName:user.name||'Клиент ProfiNavi',createdAt:r.created_at,syncedToSupabase:true}});
+  localStorage.setItem('pn_bookings',JSON.stringify(mapped));return mapped;
+ },
  async hydratePublicMasterCache(legacyId=0){
   const b=await PNData.loadPublicMasterBundle(legacyId);if(!b)return null;const p=b.profile;let c={};try{c=JSON.parse(localStorage.getItem(`pn_master_profile_${legacyId}`)||'{}')}catch(e){}
   c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};
   c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem(`pn_master_profile_${legacyId}`,JSON.stringify(c));
-  localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
+  localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   if(legacyId===0)localStorage.setItem('pn_master_services_0',localStorage.getItem(`pn_master_services_${legacyId}`)||'[]');
   localStorage.setItem(`pn_public_reviews_${legacyId}`,JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,rating:Number(x.rating)||0,text:x.text||'',photos:x.photos||[],date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true}))));
   {const slotMap={};(b.slots||[]).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(slotMap[k]||(slotMap[k]=[])).push(t)});localStorage.setItem(`pn_public_slots_${legacyId}`,JSON.stringify(slotMap));}
@@ -321,13 +357,21 @@ window.PNBackendSync={
    c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,
     about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,
     payment:p.payment||c.payment,locationInfo:p.location_info||c.locationInfo,scheduleType:p.schedule_config?.days||c.scheduleType,workDays:p.schedule_config?.workDays||c.workDays,
-    openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
-  localStorage.setItem('pn_master_services_0',JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
+    openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,scheduleStep:Number(p.schedule_config?.step)||c.scheduleStep||60,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c));
+   if(p.schedule_config)localStorage.setItem('pn_master_schedule_config',JSON.stringify({days:p.schedule_config.days||'Ежедневно',start:p.schedule_config.start||'10:00',end:p.schedule_config.end||'19:00',step:Number(p.schedule_config.step)||60}))}
+  localStorage.setItem('pn_master_services_0',JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   {let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
-  {const o={};(b.slots||[]).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(o[k]||(o[k]=[])).push(t)});localStorage.setItem('pn_master_slots',JSON.stringify(o))}
-  if(b.bookings)localStorage.setItem('pn_bookings',JSON.stringify(b.bookings.map(x=>({id:x.id,master:0,masterId:0,clientId:x.client_id,clientName:x.client_name||'Клиент',service:x.service_name||'Услуга',date:x.starts_at,time:new Date(x.starts_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status:x.status==='approved'?'confirmed':x.status==='declined'?'cancelled':x.status,syncedToSupabase:true}))));
+  {const o={};(b.slots||[]).filter(x=>x.is_available===true).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(o[k]||(o[k]=[])).push(t)});localStorage.setItem('pn_master_slots',JSON.stringify(o))}
+  if(b.bookings)localStorage.setItem('pn_bookings',JSON.stringify(b.bookings.map(x=>({id:x.id,master:Number(x.legacy_master_id)||0,masterId:Number(x.legacy_master_id)||0,masterUuid:x.master_id,clientId:x.client_id,clientName:x.client_name||'Клиент',masterName:x.master_name||'',service:x.service_name||'Услуга',serviceId:x.service_id||null,date:x.starts_at,endsAt:x.ends_at||null,time:new Date(x.starts_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),price:Number(x.price)||0,status:x.status==='approved'?'confirmed':x.status==='declined'?'cancelled':x.status,createdAt:x.created_at,syncedToSupabase:true}))));
   localStorage.setItem('pn_master_backend_reviews',JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,name:x.client_name||'Клиент',rating:Number(x.rating)||0,service:x.service_name||'Услуга',text:x.text||'',date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,photos:x.photos||[]}))));
   return b;
+ },
+ async hydrateMasterChats(){
+  const u=await PNAuth.currentUser();if(!u)return{};
+  const cs=await PNData.listConversations(),cache=JSON.parse(localStorage.getItem('pn_chats')||'{}'),allowed=new Set(cs.map(c=>String(c.booking_id)));
+  const bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');(Array.isArray(bookings)?bookings:[]).filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);
+  for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'master':'client',text:m.body,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}
+  localStorage.setItem('pn_chats',JSON.stringify(cache));return cache;
  },
  async hydrateClientFavorites(){try{const ids=await PNData.listLegacyFavorites();localStorage.setItem('pn_favs',JSON.stringify(ids));return ids}catch(e){return[]}}
 };

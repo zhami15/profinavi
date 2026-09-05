@@ -31,7 +31,7 @@ function fullPhone(v){const d=digitsLocal(v);return d.length===9?'+996'+d:''}
 function formatLocal(v){const d=digitsLocal(v),a=d.slice(0,3),b=d.slice(3,5),c=d.slice(5,7),e=d.slice(7,9);return[a,b,c,e].filter(Boolean).join(' ')}
 function bindPhone(id){const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{el.value=formatLocal(el.value)})}
 const $=id=>document.getElementById(id);let pending=null;
-const params=new URLSearchParams(location.search);const returnTo=params.get('return')||'client.html';
+const params=new URLSearchParams(location.search);const returnTo=window.PNSafeReturnPath?PNSafeReturnPath(params.get('return'),'client.html'):'client.html';
 const startMode=(params.get('mode')||location.hash.replace('#','')||'').toLowerCase();
 function finishClientAuth(){localStorage.setItem('pn_last_mode','client');location.href=returnTo}
 function pane(id){['loginPane','registerPane','codePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}

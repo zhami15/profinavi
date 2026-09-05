@@ -47,6 +47,7 @@ let bookingDays=60;
 let maxDate=new Date(today);
 let visibleStart=new Date(today);
 
+function bookingEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function localDateKey(date){
  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
@@ -91,19 +92,34 @@ function timeSlots(){
  const out=[];for(let h=9;h<=20;h++){out.push(`${String(h).padStart(2,'0')}:00`);if(h<20)out.push(`${String(h).padStart(2,'0')}:30`)}return out;
 }
 function slotDateTime(date,time){const [h,min]=time.split(':').map(Number);const dt=new Date(date);dt.setHours(h,min,0,0);return dt}
+function selectedDurationMinutes(){return Math.max(1,Number(service?.durationMinutes)||window.PNDurationMinutes?.(service?.time,60)||60)}
+function slotRange(date,time){const start=slotDateTime(date,time).getTime();return{start,end:start+selectedDurationMinutes()*60000}}
 function isPastSlot(date,time){return slotDateTime(date,time).getTime()<=Date.now()}
 function isBookedAlready(date,time){
  try{
-  const bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');
+  const candidate=slotRange(date,time),bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');
   return bookings.some(x=>{
-   if(Number(x.master??x.masterId??-1)!==masterIndex||x.status==='cancelled'||x.status==='declined')return false;
-   const d=new Date(x.date||x.starts_at);return !Number.isNaN(d.getTime())&&localDateKey(d)===localDateKey(date)&&String(x.time||'')===time;
+   if(Number(x.master??x.masterId??-1)!==masterIndex||['cancelled','declined'].includes(x.status))return false;
+   const start=new Date(x.date||x.starts_at).getTime();if(!Number.isFinite(start))return false;
+   let end=new Date(x.endsAt||x.ends_at||'').getTime();if(!Number.isFinite(end)){const dur=Math.max(1,Number(x.durationMinutes)||60);end=start+dur*60000}
+   return candidate.start<end&&start<candidate.end;
   });
  }catch(e){return false}
 }
+function isFullyCoveredByOpenSlots(date,time){
+ const key=localDateKey(date),candidate=slotRange(date,time),intervals=m?.slotIntervals?.[key]||[];
+ if(intervals.length){
+  let cursor=candidate.start;
+  for(const iv of intervals){if(iv.end<=cursor)continue;if(iv.start>cursor)return false;cursor=Math.max(cursor,iv.end);if(cursor>=candidate.end)return true}
+  return false;
+ }
+ const step=Math.max(5,Number(m?.scheduleStep)||60),times=new Set(m?.slotMap?.[key]||[]);
+ for(let t=candidate.start;t<candidate.end;t+=step*60000){const d=new Date(t),label=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;if(!times.has(label))return false}
+ return true;
+}
 function isAvailable(date,time){
  if(isPastSlot(date,time)||isBookedAlready(date,time))return false;
- if(m?._backend)return (m.slotMap?.[localDateKey(date)]||[]).includes(time);
+ if(m?._backend)return (m.slotMap?.[localDateKey(date)]||[]).includes(time)&&isFullyCoveredByOpenSlots(date,time);
  return false;
 }
 function fmtDate(d){return `${d.getDate()} ${monthNames[d.getMonth()].toLowerCase()}`}
@@ -123,11 +139,11 @@ function render(){
    <button class="booking-close" onclick="history.length>1?history.back():location.href='profile.html?id=${masterIndex}'" aria-label="Закрыть">×</button><h1>Запись</h1><span></span>
   </header>
   <section class="booking-service"><h2>Выбранная услуга</h2><article>
-   <img src="${service.image||m.gallery?.[0]||m.avatar}" alt="${service.name}">
-   <div><small>${m.name}</small><h3>${service.name}</h3><p>${service.desc||''}</p><span>${service.time?`◷ ${service.time}`:''}</span><strong>${service.price||''}</strong></div>
+   <img src="${bookingEsc(service.image||m.gallery?.[0]||m.avatar)}" alt="${bookingEsc(service.name)}">
+   <div><small>${bookingEsc(m.name)}</small><h3>${bookingEsc(service.name)}</h3><p>${bookingEsc(service.desc||'')}</p><span>${service.time?`◷ ${bookingEsc(service.time)}`:''}</span><strong>${bookingEsc(service.price||'')}</strong></div>
   </article></section>
   <section class="booking-calendar-section">
-   <div class="booking-section-title"><h2>Выберите дату и время</h2><span>${m.district||''}</span></div>
+   <div class="booking-section-title"><h2>Выберите дату и время</h2><span>${bookingEsc(m.district||'')}</span></div>
    ${!hasAny?'<div class="master-empty booking-no-slots"><b>У мастера пока нет свободных окон</b><p>Попробуйте проверить расписание позже.</p></div>':`
    <div class="booking-month-row"><button ${atStart()?'disabled':''} onclick="shiftWeek(-7)" aria-label="Предыдущая неделя">‹</button><b>${monthNames[days[0].getMonth()]} ${days[0].getFullYear()}</b><button ${atEnd()?'disabled':''} onclick="shiftWeek(7)" aria-label="Следующая неделя">›</button></div>
    <div class="booking-table-wrap"><table class="booking-table">
@@ -135,11 +151,11 @@ function render(){
     <tbody>${times.map(t=>`<tr><th>${t}</th>${days.map(d=>{const ok=isAvailable(d,t),selected=sameDay(selectedDate,d)&&selectedTime===t;return `<td><button class="slot ${ok?'available':'busy'} ${selected?'selected':''}" ${ok?`onclick="selectSlot('${d.toISOString()}','${t}')"`:'disabled'} aria-label="${ok?'Доступно':(isPastSlot(d,t)?'Время прошло':'Недоступно')} ${fmtDate(d)} ${t}">${ok?'○':'×'}</button></td>`}).join('')}</tr>`).join('')}</tbody>
    </table></div>`}
   </section>
-  <div class="booking-footer"><div>${selectedDate?`<b>${fmtDate(selectedDate)}, ${selectedTime}</b><span>${service.name}</span>`:'<b>Выберите свободное время</b><span>Доступные слоты отмечены кружком</span>'}</div><button ${selectedDate?'':'disabled'} onclick="confirmBooking()">Продолжить</button></div>`;
+  <div class="booking-footer"><div>${selectedDate?`<b>${fmtDate(selectedDate)}, ${selectedTime}</b><span>${bookingEsc(service.name)}</span>`:'<b>Выберите свободное время</b><span>Доступные слоты отмечены кружком</span>'}</div><button ${selectedDate?'':'disabled'} onclick="confirmBooking()">Продолжить</button></div>`;
 }
 function shiftWeek(delta){const next=new Date(visibleStart);next.setDate(next.getDate()+delta);if(next<today)visibleStart=new Date(today);else if(next>maxDate)return;else visibleStart=next;render()}
 function selectSlot(iso,time){selectedDate=new Date(iso);selectedTime=time;render();setTimeout(()=>document.querySelector('.booking-footer')?.scrollIntoView({behavior:'smooth',block:'end'}),30)}
-function confirmBooking(){if(!selectedDate||!selectedTime)return;const params=new URLSearchParams({master:String(masterIndex),service:service.name,date:selectedDate.toISOString(),time:selectedTime});location.href=`booking-confirm.html?${params.toString()}`}
+function confirmBooking(){if(!selectedDate||!selectedTime)return;const params=new URLSearchParams({master:String(masterIndex),service:service.name,date:selectedDate.toISOString(),time:selectedTime});if(service.id)params.set('serviceId',String(service.id));location.href=`booking-confirm.html?${params.toString()}`}
 
 async function pnHydrateBookingMaster(){
  loadingBackend=true;loadError='';if(!m)render();

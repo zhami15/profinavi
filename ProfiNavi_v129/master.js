@@ -41,6 +41,7 @@ const MASTER_KEY='pn_master_session';
 const SERVICE_KEY='pn_master_services_0';
 const SLOT_KEY='pn_master_slots';
 const CHAT_KEY='pn_chats';
+function masterEsc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
 let masterSupportState={lastMessage:null,unreadCount:0};
 async function pnHydrateMasterSupport(){try{if(!window.PNData||!window.PNAuth)return masterSupportState;const u=await PNAuth.currentUser();if(!u){masterSupportState={lastMessage:null,unreadCount:0};localStorage.setItem('pn_support_unread','0');return masterSupportState}const s=await PNData.getSupportSummary();masterSupportState={lastMessage:s?.lastMessage||null,unreadCount:Number(s?.unreadCount||0)};localStorage.setItem('pn_support_unread',masterSupportState.unreadCount?'1':'0');return masterSupportState}catch(e){console.warn('master support',e);return masterSupportState}}
 
@@ -71,6 +72,7 @@ function masterChatExpired(b){
  const dt=bookingEndAt(b);
  return dt?Date.now()>=dt.getTime()+72*60*60*1000:false;
 }
+function masterChatClosed(b){return !b||b.status==='cancelled'||b.status==='declined'||masterChatExpired(b)}
 function pushMasterMessage(bookingId,text,kind='message'){
  const chats=jget(CHAT_KEY,{});
  const key=String(bookingId);
@@ -103,6 +105,7 @@ function services(){
 }
 let masterSaveQueue=Promise.resolve();
 let masterSaveError=null;
+let masterSlotSaveTimer=null;
 function masterToast(text,isError=false){
  let el=document.getElementById('pnMasterSaveToast');
  if(!el){el=document.createElement('div');el.id='pnMasterSaveToast';el.style.cssText='position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:10050;max-width:90vw;padding:10px 14px;border-radius:14px;font:700 13px/1.35 system-ui;background:#222;color:#fff;box-shadow:0 8px 28px #0003;opacity:0;transition:.2s;pointer-events:none';document.body.appendChild(el)}
@@ -113,7 +116,16 @@ function queueMasterSave(task){
  masterSaveQueue=run.then(()=>{masterSaveError=null},e=>{masterSaveError=e;console.warn('master backend save',e)});
  return run;
 }
-async function flushMasterSaves(){await masterSaveQueue;if(masterSaveError){const e=masterSaveError;masterSaveError=null;throw e}}
+function queueLatestSlots(){
+ if(masterSlotSaveTimer){clearTimeout(masterSlotSaveTimer);masterSlotSaveTimer=null}
+ if(!window.PNData?.replaceAvailability)return Promise.resolve();
+ const snapshot=jget(SLOT_KEY,{});
+ return queueMasterSave(()=>PNData.replaceAvailability(snapshot));
+}
+async function flushMasterSaves(){
+ if(masterSlotSaveTimer)queueLatestSlots();
+ await masterSaveQueue;if(masterSaveError){const e=masterSaveError;masterSaveError=null;throw e}
+}
 function saveServices(v){
  jset(SERVICE_KEY,v);
  if(!window.PNData?.replaceMasterServices)return Promise.resolve(v);
@@ -145,7 +157,7 @@ async function toggleMasterPublish(){
 }
 function money(v){return new Intl.NumberFormat('ru-RU').format(Number(v)||0)+' сом'}
 function sameDay(a,b){const x=new Date(a),y=new Date(b);return x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate()}
-function bookingRevenue(b){const s=services().find(x=>x.name===b.service);return s?.price||1200}
+function bookingRevenue(b){if(Number.isFinite(Number(b?.price))&&Number(b.price)>=0)return Number(b.price);const s=services().find(x=>x.name===b.service);return Number(s?.newPrice??s?.price)||0}
 
 const MASTER_READ_KEY='pn_master_chat_read_at';
 function masterReadMap(){return jget(MASTER_READ_KEY,{})}
@@ -190,10 +202,10 @@ function masterHeader(title,sub=''){
      <button class="pro-back-client" onclick="switchToClient()" aria-label="Вернуться в клиентский режим">‹</button>
      <div class="pro-centered-logo"><span class="logo-pink">Profi</span><span class="logo-black">Navi</span><small>PRO</small></div>
      <button class="pro-profile-icon pro-account-icon" type="button" onclick="openMasterAccount()" aria-label="Аккаунт">
-       <img src="${p.avatar}" alt="${p.name||'Аккаунт'}">
+       <img src="${p.avatar}" alt="${masterEsc(p.name||'Аккаунт')}">
      </button>
    </div>
-   <div class="pro-current-page"><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div>
+   <div class="pro-current-page"><h1>${masterEsc(title)}</h1>${sub?`<p>${masterEsc(sub)}</p>`:''}</div>
  </header>
 
  <div class="master-account-overlay hidden" id="masterAccountModal" onclick="if(event.target===this)closeMasterAccount()">
@@ -201,9 +213,9 @@ function masterHeader(title,sub=''){
      <button class="master-account-close" type="button" onclick="closeMasterAccount()" aria-label="Закрыть">×</button>
 
      <div class="master-account-header">
-       <img src="${p.avatar}" alt="${p.name||'Аккаунт'}">
+       <img src="${p.avatar}" alt="${masterEsc(p.name||'Аккаунт')}">
        <div>
-         <h2>${p.name||'Мастер ProfiNavi'}</h2>
+         <h2>${masterEsc(p.name||'Мастер ProfiNavi')}</h2>
          <p>Аккаунт ProfiNavi</p>
        </div>
      </div>
@@ -211,7 +223,7 @@ function masterHeader(title,sub=''){
      <div class="master-account-section">
        <h3>Информация об аккаунте</h3>
        <div class="master-account-list">
-         <div class="master-account-row"><span>Имя</span><strong>${p.name||'Не указано'}</strong></div>
+         <div class="master-account-row"><span>Имя</span><strong>${masterEsc(p.name||'Не указано')}</strong></div>
          <div class="master-account-row"><span>Город</span><strong>Бишкек</strong></div>
          <div class="master-account-row"><span>Режим</span><strong>Мастер</strong></div>
        </div>
@@ -239,6 +251,10 @@ async function pnConversationForBooking(bookingId){
 async function pnSendBookingMessage(bookingId,text){
  const c=await pnConversationForBooking(bookingId);if(!c)return false;
  await PNData.sendMessage(c.id,text);return true;
+}
+async function pnHydrateMasterChatsFromBackend(){
+ if(!window.PNBackendSync?.hydrateMasterChats)return{};
+ return PNBackendSync.hydrateMasterChats();
 }
 
 
@@ -278,7 +294,7 @@ async function confirmBooking(id,noReload=false){
    const d=new Date(b.date);
    const dateText=!Number.isNaN(d.getTime())?d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'}):'';
    const approvalText=`Ваша запись подтверждена${dateText?` на ${dateText}`:''}${b.time?` в ${b.time}`:''}. Жду вас!`;
-   if(b.syncedToSupabase&&window.PNData){try{await pnSendBookingMessage(b.id,approvalText)}catch(e){console.warn('approval message backend',e)}}else pushMasterMessage(b.id,approvalText,'booking-confirmed');
+   if(b.syncedToSupabase&&window.PNData){try{await pnSendBookingMessage(b.id,approvalText);await pnHydrateMasterChatsFromBackend()}catch(e){console.warn('approval message backend',e)}}else pushMasterMessage(b.id,approvalText,'booking-confirmed');
  }
  if(!noReload)location.reload();
 }
@@ -313,14 +329,18 @@ async function cancelBooking(id,noReload=false){
  }
  if(!noReload)location.reload();
 }
-function getSlots(){
- let s=jget(SLOT_KEY,null);
- if(s) return s;
- const d=new Date(), out={};
- for(let i=0;i<7;i++){let x=new Date(d);x.setDate(x.getDate()+i);out[x.toISOString().slice(0,10)]=['10:00','11:30','13:00','15:00','17:30']}
- return out;
+async function completeBookingByMaster(id,noReload=false){
+ const bookings=getBookings(),b=bookings.find(x=>String(x.id)===String(id));if(!b||b.status!=='confirmed')return;
+ const dt=bookingEndAt(b);if(dt&&Date.now()<dt.getTime()){alert('Завершить запись можно после начала процедуры.');return}
+ try{if(b.syncedToSupabase&&window.PNData)await PNData.updateBookingStatus(id,'completed');b.status='completed';b.completedAt=new Date().toISOString();setBookings(bookings);if(!noReload)location.reload()}catch(e){alert('Не удалось завершить запись: '+e.message)}
 }
-function saveSlots(s){jset(SLOT_KEY,s);window.PNData?.replaceAvailability?.(s).catch(e=>console.warn('slots backend',e))}
+function getSlots(){return jget(SLOT_KEY,{})||{}}
+function saveSlots(s){
+ jset(SLOT_KEY,s||{});
+ if(!window.PNData?.replaceAvailability)return;
+ clearTimeout(masterSlotSaveTimer);
+ masterSlotSaveTimer=setTimeout(()=>{masterSlotSaveTimer=null;queueLatestSlots().catch(e=>console.warn('slots backend',e))},300);
+}
 function openSlotEditor(){
  const slots=getSlots(), key=new Date().toISOString().slice(0,10), current=(slots[key]||[]).join(', ');
  const val=prompt('Свободное время на сегодня. Введите через запятую:',current);
@@ -354,9 +374,12 @@ function liveScheduleChange(){
 }
 
 function saveScheduleConfig(){
- // Dropdown changes are already applied live.
- // Saving must only confirm the current state and must not rebuild/reset edited calendar cells.
+ // Dropdown changes are already applied live. Persist the same config in master_profiles
+ // so another device and the public profile show the actual schedule settings.
  jset('pn_master_schedule_config',masterScheduleConfig);
+ const p=profile();
+ saveProfile({...p,scheduleType:masterScheduleConfig.days,openTime:masterScheduleConfig.start,closeTime:masterScheduleConfig.end,scheduleStep:Number(masterScheduleConfig.step)||60});
+ queueLatestSlots().catch(e=>console.warn('schedule save',e));
  showScheduleSavedPopup();
 }
 
@@ -438,8 +461,8 @@ function renderDashboard(){
           <span class="home-request-badge">Новая запись</span>
         </div>
         <div class="home-request-body">
-          <strong>${b.clientName||'Клиент ProfiNavi'}</strong>
-          <span>${b.service||'Услуга'}</span>
+          <strong>${masterEsc(b.clientName||'Клиент ProfiNavi')}</strong>
+          <span>${masterEsc(b.service||'Услуга')}</span>
         </div>
         <div class="home-request-actions">
           <button class="approve" onclick="confirmBooking('${b.id}')">Подтвердить</button>
@@ -452,9 +475,11 @@ function renderDashboard(){
  ${renderAvailabilityCalendar()}
  ${nav('home')}`;
 }function bookingCard(b,actions){
- const d=new Date(b.date), date=d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
- const status=b.status==='confirmed'?'Подтверждено':b.status==='cancelled'?'Отменено':'Ожидает';
- return `<article class="master-booking-card ${b.status||'pending'}"><div class="master-booking-time"><b>${b.time||'—'}</b><span>${date}</span></div><div class="master-booking-copy"><strong>${b.service||'Услуга'}</strong><span>${b.clientName||'Клиент ProfiNavi'}</span><em class="status-${b.status||'pending'}">${status}</em></div>${actions&&b.status==='pending'?`<div class="master-booking-actions"><button onclick="confirmBooking('${b.id}')">✓ Подтвердить</button><button class="light" onclick="cancelBooking('${b.id}')">Отказать</button></div>`:''}</article>`;
+ const d=new Date(b.date), date=Number.isNaN(d.getTime())?'—':d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+ const status=b.status==='completed'||b.status==='done'?'Завершено':b.status==='confirmed'?'Подтверждено':b.status==='cancelled'?'Отменено':'Ожидает';
+ const canComplete=actions&&b.status==='confirmed'&&(!bookingEndAt(b)||Date.now()>=bookingEndAt(b).getTime());
+ const controls=actions&&b.status==='pending'?`<div class="master-booking-actions"><button onclick="confirmBooking('${b.id}')">✓ Подтвердить</button><button class="light" onclick="cancelBooking('${b.id}')">Отказать</button></div>`:canComplete?`<div class="master-booking-actions"><button onclick="completeBookingByMaster('${b.id}')">✓ Завершить</button></div>`:'';
+ return `<article class="master-booking-card ${b.status||'pending'}"><div class="master-booking-time"><b>${masterEsc(b.time||'—')}</b><span>${date}</span></div><div class="master-booking-copy"><strong>${masterEsc(b.service||'Услуга')}</strong><span>${masterEsc(b.clientName||'Клиент ProfiNavi')}</span><em class="status-${b.status||'pending'}">${status}</em></div>${controls}</article>`;
 }
 function renderBookings(){
  if(!requireMaster())return;
@@ -465,11 +490,10 @@ function renderBookings(){
  draw();document.querySelectorAll('#masterDays button').forEach(btn=>btn.onclick=()=>{selected=+btn.dataset.day;document.querySelectorAll('#masterDays button').forEach(x=>x.classList.toggle('active',x===btn));draw()});
 }
 
-function sendQuickReply(id,text){
+async function sendQuickReply(id,text){
  const b=getBookings().find(x=>String(x.id)===String(id));
- if(!b || masterChatExpired(b))return false;
- pushMasterMessage(id,text,'message');
- if(b.syncedToSupabase&&window.PNData)pnSendBookingMessage(id,text).catch(e=>console.warn('message backend',e));
+ if(!b || masterChatClosed(b))return false;
+ if(b.syncedToSupabase&&window.PNData){await pnSendBookingMessage(id,text);await pnHydrateMasterChatsFromBackend()}else pushMasterMessage(id,text,'message');
  return true;
 }
 function openChat(id){
@@ -486,13 +510,14 @@ function openChat(id){
    const current=getBookings().find(x=>String(x.id)===String(id))||booking;
    const msgs=(jget(CHAT_KEY,{})[String(id)]||[]);
    const expired=masterChatExpired(current);
+   const closed=masterChatClosed(current);
    const pending=current.status==='pending';
 
    overlay.innerHTML=`<div class="master-chat-head">
      <button type="button" id="closeChat">‹</button>
      <div>
-       <b>${current.clientName||'Клиент ProfiNavi'}</b>
-       <small>${current.service||''} · ${current.time||''}${expired?' · чат закрыт':''}</small>
+       <b>${masterEsc(current.clientName||'Клиент ProfiNavi')}</b>
+       <small>${masterEsc(current.service||'')} · ${masterEsc(current.time||'')}${expired?' · чат закрыт':''}</small>
      </div>
    </div>
 
@@ -501,15 +526,14 @@ function openChat(id){
      <button type="button" class="decline" id="chatDecline">Отклонить</button>
    </div>`:''}
 
-   ${current.status==='confirmed'?'<div class="chat-booking-status confirmed">✓ Запись подтверждена</div>':
-     current.status==='cancelled'?'<div class="chat-booking-status cancelled">Запись отклонена</div>':''}
+   ${current.status==='completed'||current.status==='done'?'<div class="chat-booking-status confirmed">✓ Запись завершена</div>':current.status==='confirmed'?'<div class="chat-booking-status confirmed">✓ Запись подтверждена</div>':current.status==='cancelled'?'<div class="chat-booking-status cancelled">Запись отменена</div>':''}
 
    <div class="master-chat-thread">
-     ${msgs.length?msgs.map(msg=>`<div class="bubble ${msg.from==='master'?'mine':'incoming'}">${msg.text}</div>`).join(''):'<div class="master-empty">Начните переписку</div>'}
-     ${expired?'<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>Прошло 72 часа после времени записи.</p></div>':''}
+     ${msgs.length?msgs.map(msg=>`<div class="bubble ${msg.from==='master'?'mine':'incoming'}">${masterEsc(msg.text)}</div>`).join(''):'<div class="master-empty">Начните переписку</div>'}
+     ${closed?`<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>${current.status==='cancelled'||current.status==='declined'?'Запись отменена.':'Прошло 72 часа после времени записи.'}</p></div>`:''}
    </div>
 
-   ${!expired?`<div class="quick-replies">
+   ${!closed?`<div class="quick-replies">
      <button type="button" data-reply="Здравствуйте! Да, время свободно 😊">Время свободно</button>
      <button type="button" data-reply="Спасибо за запись! Буду ждать вас 🤍">Буду ждать</button>
      <button type="button" data-reply="Можете, пожалуйста, уточнить желаемый дизайн?">Уточнить дизайн</button>
@@ -529,15 +553,15 @@ function openChat(id){
    if(decline)decline.onclick=async()=>{await cancelBooking(id,true);draw()};
 
    overlay.querySelectorAll('.quick-replies button').forEach(btn=>{
-     btn.onclick=()=>{sendQuickReply(id,btn.dataset.reply);draw()};
+     btn.onclick=async()=>{try{await sendQuickReply(id,btn.dataset.reply);draw()}catch(e){alert('Не удалось отправить сообщение: '+e.message)}};
    });
 
    const form=overlay.querySelector('#chatForm');
-   if(form)form.onsubmit=e=>{
+   if(form)form.onsubmit=async e=>{
      e.preventDefault();
      const input=overlay.querySelector('#chatInput'),text=input.value.trim();
      if(!text)return;
-     if(sendQuickReply(id,text)){input.value='';draw()}
+     try{if(await sendQuickReply(id,text)){input.value='';draw()}}catch(err){alert('Не удалось отправить сообщение: '+err.message)}
    };
 
    requestAnimationFrame(()=>{
@@ -575,9 +599,9 @@ function renderChats(){
    return `<button class="master-chat-item chat-button ${unread?'is-unread':''}" onclick="openChat('${b.id}')">
      <div class="master-client-avatar">${(b.clientName||'К')[0]}</div>
      <div>
-       <b>${b.clientName||'Клиент ProfiNavi'}</b>
-       <p>${last?last.text:'Нет сообщений'}</p>
-       <small>${b.service||'Услуга'} · ${b.time||''}${expired?' · чат закрыт':''}</small>
+       <b>${masterEsc(b.clientName||'Клиент ProfiNavi')}</b>
+       <p>${masterEsc(last?last.text:'Нет сообщений')}</p>
+       <small>${masterEsc(b.service||'Услуга')} · ${masterEsc(b.time||'')}${expired?' · чат закрыт':''}</small>
      </div>
      <span class="chat-row-end">${unread?'<i class="master-unread-badge">1</i>':''}<em>›</em></span>
    </button>`;
@@ -603,7 +627,7 @@ function editService(i){
  data[i]={...s,name,price:Number(price)||0,time,promo,discount:Number(discount)||0};saveServices(data);renderProfile();
 }
 function addService(){let d=services();d.push({name:'Новая услуга',price:1000,time:'1 ч.',promo:'',discount:0,image:null});saveServices(d);renderProfile();setTimeout(()=>openServiceEditor(d.length-1),40)}
-function serviceRows(data){return data.map((s,i)=>`<article class="master-service-edit"><div><b>${s.name}</b><span>${s.price===0?'0 сом · Ищу моделей':money(s.price)}${s.promo?` · ${s.promo}${s.discount?` −${s.discount}%`:''}`:''}</span></div><button onclick="openServiceEditor(${i})">Редактировать</button></article>`).join('')}
+function serviceRows(data){return data.map((s,i)=>`<article class="master-service-edit"><div><b>${masterEsc(s.name)}</b><span>${s.price===0?'0 сом · Ищу моделей':money(s.price)}${s.promo?` · ${masterEsc(s.promo)}${s.discount?` −${s.discount}%`:''}`:''}</span></div><button onclick="openServiceEditor(${i})">Редактировать</button></article>`).join('')}
 
 function editWork(i){
  const p=profile(), works=[...(p.works||[])];
@@ -646,12 +670,12 @@ function masterServiceCard(s,i,p){
  const discount=hasNew&&old>0?Math.round((old-final)/old*100):0;
  const img=s.image||null;
  return `<article class="full-menu-card master-editable-service" onclick="openServiceEditor(${i})">
-   <div class="service-card-media">${img?`<img src="${img}" alt="${s.name}">`:`<div class="service-card-no-image"><span>Фото</span></div>`}</div>
+   <div class="service-card-media">${img?`<img src="${img}" alt="${masterEsc(s.name)}">`:`<div class="service-card-no-image"><span>Фото</span></div>`}</div>
    <div class="full-menu-info">
-     <div class="service-offer-line">${s.promo?`<span class="service-promo-badge">${s.promo}</span>`:''}${discount?`<span class="discount-percent">-${discount}%</span>`:''}</div>
-     <h3>${s.name}</h3>
+     <div class="service-offer-line">${s.promo?`<span class="service-promo-badge">${masterEsc(s.promo)}</span>`:''}${discount?`<span class="discount-percent">-${discount}%</span>`:''}</div>
+     <h3>${masterEsc(s.name)}</h3>
      <div class="service-price-row">${hasNew?`<strong class="promo-price">${final} сом</strong><span class="old-service-price">${old} сом</span>`:`<strong class="regular-price">${old} сом</strong>`}</div>
-     <small>${s.time||''}</small>
+     <small>${masterEsc(s.time||'')}</small>
    </div>
  </article>`;
 }
@@ -737,11 +761,11 @@ function openProfileEditor(){
       <button id="editCover" type="button">Изменить обложку</button>
     </section>
     <section class="edit-fields">
-      <label><span>Имя / название</span><input id="epName" value="${(p.name||'').replace(/"/g,'&quot;')}"></label>
-      <label><span>Район / ориентир</span><input id="epArea" value="${(p.area||'').replace(/"/g,'&quot;')}"></label>
-      <label><span>Адрес</span><input id="epAddress" value="${(p.address||'').replace(/"/g,'&quot;')}"></label>
+      <label><span>Имя / название</span><input id="epName" value="${masterEsc(p.name||'')}"></label>
+      <label><span>Район / ориентир</span><input id="epArea" value="${masterEsc(p.area||'')}"></label>
+      <label><span>Адрес</span><input id="epAddress" value="${masterEsc(p.address||'')}"></label>
       
-      <label class="textarea-label"><span>О мастере</span><textarea id="epAbout" maxlength="220">${p.about||''}</textarea><small><b id="aboutCount">${(p.about||'').length}</b>/220</small></label>
+      <label class="textarea-label"><span>О мастере</span><textarea id="epAbout" maxlength="220">${masterEsc(p.about||'')}</textarea><small><b id="aboutCount">${(p.about||'').length}</b>/220</small></label>
       
       
     </section>
@@ -773,7 +797,7 @@ function editStrengths(){
  const ov=document.createElement('div');ov.className='master-edit-profile-overlay';
  ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Сильные стороны</b><button class="edit-save">Готово</button></header><section class="strength-editor"><p>Выберите подходящие или добавьте свои.</p><div class="strength-choice-list">${presets.map(x=>`<button type="button" class="${selected.includes(x)?'active':''}" data-strength="${x}">${x}</button>`).join('')}</div><label class="custom-strength"><span>Своя сильная сторона</span><div><input id="customStrength" placeholder="Например: японский маникюр"><button id="addStrength" type="button">Добавить</button></div></label><div class="selected-strengths" id="selectedStrengths"></div></section></div>`;
  document.body.appendChild(ov);
- const draw=()=>{ov.querySelector('#selectedStrengths').innerHTML=selected.map((x,i)=>`<span>${x}<button type="button" data-i="${i}">×</button></span>`).join('');ov.querySelectorAll('#selectedStrengths button').forEach(b=>b.onclick=()=>{selected.splice(+b.dataset.i,1);draw();ov.querySelectorAll('[data-strength]').forEach(q=>q.classList.toggle('active',selected.includes(q.dataset.strength)))})};
+ const draw=()=>{ov.querySelector('#selectedStrengths').innerHTML=selected.map((x,i)=>`<span>${masterEsc(x)}<button type="button" data-i="${i}">×</button></span>`).join('');ov.querySelectorAll('#selectedStrengths button').forEach(b=>b.onclick=()=>{selected.splice(+b.dataset.i,1);draw();ov.querySelectorAll('[data-strength]').forEach(q=>q.classList.toggle('active',selected.includes(q.dataset.strength)))})};
  ov.querySelectorAll('[data-strength]').forEach(b=>b.onclick=()=>{const x=b.dataset.strength,i=selected.indexOf(x);if(i>=0)selected.splice(i,1);else selected.push(x);b.classList.toggle('active');draw()});
  ov.querySelector('#addStrength').onclick=()=>{const inp=ov.querySelector('#customStrength'),v=inp.value.trim();if(v&&!selected.includes(v)){selected.push(v);inp.value='';draw()}};
  ov.querySelector('.edit-close').onclick=()=>ov.remove();ov.querySelector('.edit-save').onclick=()=>{saveProfile({...p,strengths:selected});ov.remove();renderProfile()};draw();
@@ -781,7 +805,7 @@ function editStrengths(){
 function openServiceEditor(i){
  const data=services(),s=data[i];if(!s)return;const p=profile();const img=s.image||null;
  const ov=document.createElement('div');ov.className='master-edit-profile-overlay';
- ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Услуга</b><button class="edit-save">Готово</button></header><section class="service-photo-editor">${img?`<img id="sip" src="${img}">`:`<div id="sip" class="service-image-empty">Фото не добавлено</div>`}<button id="csi">Добавить / изменить фото</button></section><section class="edit-fields"><label><span>Название</span><input id="sn" value="${(s.name||'').replace(/"/g,'&quot;')}"></label><label><span>Обычная цена, сом</span><input id="sp" type="number" min="0" value="${Number(s.price)||0}"></label><label><span>Новая цена, сом</span><input id="snp" type="number" min="0" value="${s.newPrice??''}" placeholder="Если скидки нет — оставьте пустым"></label><div class="auto-discount-row"><span>Скидка</span><b id="sd">—</b></div><label><span>Длительность</span><input id="st" value="${s.time||''}"></label><label><span>Акция</span><select id="spr"><option value="">Без акции</option><option value="Знакомство с мастером" ${s.promo==='Знакомство с мастером'?'selected':''}>Знакомство с мастером</option><option value="Ищу моделей" ${s.promo==='Ищу моделей'?'selected':''}>Ищу моделей</option><option value="custom" ${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'selected':''}>Своя акция</option></select></label><label id="cpl" style="display:${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'block':'none'}"><span>Название своей акции</span><input id="cp" value="${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?s.promo:''}" placeholder="Напишите название"></label></section><button class="delete-service-btn" id="deleteServiceBtn" type="button">Удалить услугу</button></div>`;
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Услуга</b><button class="edit-save">Готово</button></header><section class="service-photo-editor">${img?`<img id="sip" src="${img}">`:`<div id="sip" class="service-image-empty">Фото не добавлено</div>`}<button id="csi">Добавить / изменить фото</button></section><section class="edit-fields"><label><span>Название</span><input id="sn" value="${masterEsc(s.name||'')}"></label><label><span>Обычная цена, сом</span><input id="sp" type="number" min="0" value="${Number(s.price)||0}"></label><label><span>Новая цена, сом</span><input id="snp" type="number" min="0" value="${s.newPrice??''}" placeholder="Если скидки нет — оставьте пустым"></label><div class="auto-discount-row"><span>Скидка</span><b id="sd">—</b></div><label><span>Длительность</span><input id="st" value="${masterEsc(s.time||'')}"></label><label><span>Акция</span><select id="spr"><option value="">Без акции</option><option value="Знакомство с мастером" ${s.promo==='Знакомство с мастером'?'selected':''}>Знакомство с мастером</option><option value="Ищу моделей" ${s.promo==='Ищу моделей'?'selected':''}>Ищу моделей</option><option value="custom" ${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'selected':''}>Своя акция</option></select></label><label id="cpl" style="display:${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'block':'none'}"><span>Название своей акции</span><input id="cp" value="${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?masterEsc(s.promo):''}" placeholder="Напишите название"></label></section><button class="delete-service-btn" id="deleteServiceBtn" type="button">Удалить услугу</button></div>`;
  document.body.appendChild(ov);const sp=ov.querySelector('#sp'),np=ov.querySelector('#snp'),sd=ov.querySelector('#sd');
  const calc=()=>{let a=+sp.value||0,b=np.value===''?null:+np.value;sd.textContent=(b!==null&&a>0&&b<a)?'-'+Math.round((a-b)/a*100)+'%':'—'};sp.oninput=np.oninput=calc;calc();
  const sel=ov.querySelector('#spr');sel.onchange=()=>ov.querySelector('#cpl').style.display=sel.value==='custom'?'block':'none';
@@ -822,10 +846,10 @@ function openReviewPhoto(src){
 
 function renderReviewCard(r){
  return `<article class="review-card verified-review">
-   <div class="review-top"><div><b>${r.name}</b></div><span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span></div>
+   <div class="review-top"><div><b>${masterEsc(r.name||'Клиент ProfiNavi')}</b></div><span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span></div>
    <small>${r.date}</small>
-   <div class="review-service"><span>Услуга</span><b>${r.service||'Услуга не указана'}</b></div>
-   <p>${r.text}</p>
+   <div class="review-service"><span>Услуга</span><b>${masterEsc(r.service||'Услуга не указана')}</b></div>
+   <p>${masterEsc(r.text||'')}</p>
    ${r.photos&&r.photos.length?`<div class="review-photo-grid">${r.photos.slice(0,3).map(x=>`<img src="${x}" alt="Фото к отзыву" onclick="openReviewPhoto('${x}')">`).join('')}</div>`:''}
  </article>`;
 }
@@ -858,7 +882,7 @@ function openAddressEditor(){
   <header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Адрес и информация</b><button class="edit-save">Готово</button></header>
   <section class="edit-fields address-editor-fields">
    <label><span>Район</span><select id="eaArea">${districts.map(x=>`<option ${x===currentArea?'selected':''}>${x}</option>`).join('')}</select></label>
-   <label><span>Адрес</span><input id="eaAddress" value="${(p.address||'').replace(/"/g,'&quot;')}" placeholder="Улица, дом"></label>
+   <label><span>Адрес</span><input id="eaAddress" value="${masterEsc(p.address||'')}" placeholder="Улица, дом"></label>
 
    <div class="edit-group-title">График работы</div>
    <label><span>Рабочие дни</span><select id="eaScheduleType">
@@ -873,7 +897,7 @@ function openAddressEditor(){
    </div>
 
    <label><span>Оплата</span><select id="eaPayment">${payments.map(x=>`<option ${x===currentPayment?'selected':''}>${x}</option>`).join('')}</select></label>
-   <label><span>Дополнительная информация</span><textarea id="eaInfo" maxlength="180" placeholder="Например: вход со стороны парковки">${p.locationInfo||''}</textarea></label>
+   <label><span>Дополнительная информация</span><textarea id="eaInfo" maxlength="180" placeholder="Например: вход со стороны парковки">${masterEsc(p.locationInfo||'')}</textarea></label>
   </section>
  </div>`;
  document.body.appendChild(ov);
@@ -948,7 +972,7 @@ function renderProfile(){
  root.innerHTML=`<div class="profile-screen master-exact-profile">
    <header class="profile-screen-head">
      <button class="profile-back" onclick="location.href='master.html'" aria-label="Назад">‹</button>
-     <div class="profile-head-title"><img src="${p.avatar}" alt="${p.name}"><b>${p.name}</b></div>
+     <div class="profile-head-title"><img src="${p.avatar}" alt="${masterEsc(p.name)}"><b>${masterEsc(p.name)}</b></div>
      <button class="master-profile-edit-icon header-edit" onclick="openProfileEditor()" aria-label="Редактировать">✎</button>
    </header>
 
@@ -958,12 +982,12 @@ function renderProfile(){
 
    <section class="profile-summary-card">
      <div class="master-avatar-edit">
-       <img class="profile-main-avatar" src="${p.avatar}" alt="Фото ${p.name}">
+       <img class="profile-main-avatar" src="${p.avatar}" alt="Фото ${masterEsc(p.name)}">
        <button onclick="chooseImage('avatar')" aria-label="Изменить фото">✎</button>
      </div>
      <div class="profile-summary-main">
-       <h1>${p.name}</h1>
-       <p>${p.area ? `Район: ${p.area}` : 'Район не указан'}</p>
+       <h1>${masterEsc(p.name)}</h1>
+       <p>${p.area ? `Район: ${masterEsc(p.area)}` : 'Район не указан'}</p>
        <div class="profile-rating"><span>${reviews?`★ ${Number(p.rating||0).toFixed(1)} (${reviews})`:'Нет отзывов'}</span><button class="reviews-link" onclick="showAllReviews()">${reviews} отзывов</button></div>
        <button class="master-publish-btn ${p.is_published?'is-published':''}" type="button" onclick="toggleMasterPublish()">${p.is_published?'✓ Профиль опубликован':'Опубликовать профиль'}</button>
      </div>
@@ -990,8 +1014,8 @@ function renderProfile(){
 
      <section id="mp-about" class="profile-pane profile-section">
        <div class="inline-profile-head"><h2>О мастере</h2><button class="master-profile-edit-icon" onclick="openProfileEditor()">✎</button></div>
-       <div class="profile-info-block"><h3>Самопрезентация</h3><p>${p.about||'Расскажите немного о себе.'}</p></div>
-       <div class="profile-info-block"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3><button class="text-btn" onclick="editStrengths()">Изменить</button></div><div class="tag-cloud">${(p.strengths||[]).length?(p.strengths||[]).map(x=>`<span>${x}</span>`).join(''):`<button class="empty-strengths" onclick="editStrengths()">Выбрать сильные стороны</button>`}</div></div>
+       <div class="profile-info-block"><h3>Самопрезентация</h3><p>${masterEsc(p.about||'Расскажите немного о себе.')}</p></div>
+       <div class="profile-info-block"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3><button class="text-btn" onclick="editStrengths()">Изменить</button></div><div class="tag-cloud">${(p.strengths||[]).length?(p.strengths||[]).map(x=>`<span>${masterEsc(x)}</span>`).join(''):`<button class="empty-strengths" onclick="editStrengths()">Выбрать сильные стороны</button>`}</div></div>
      </section>
 
      <section id="mp-reviews" class="profile-pane profile-section">
@@ -1005,9 +1029,9 @@ function renderProfile(){
      <section id="mp-address" class="profile-pane profile-section">
        <div class="inline-profile-head"><h2>Адрес и информация</h2><button class="text-btn" onclick="openAddressEditor()">Изменить</button></div>
        <div class="salon-photo" style="background-image:url('${gallery[1]||cover}')"></div>
-       <h3>${p.name}</h3>
-       <div class="access-list"><p>◷ ${formatWorkSchedule(p)}</p><p>₸ ${p.payment||'Наличными и переводом'}</p>${p.locationInfo?`<p>ⓘ ${p.locationInfo}</p>`:''}</div>
-       <div class="profile-map-wrap"><div class="master-map-preview exact-map"><div><b>📍 ${p.address||p.area||'Бишкек'}</b>${p.area?`<span>Район: ${p.area}</span>`:''}</div></div></div>
+       <h3>${masterEsc(p.name)}</h3>
+       <div class="access-list"><p>◷ ${masterEsc(formatWorkSchedule(p))}</p><p>₸ ${masterEsc(p.payment||'Наличными и переводом')}</p>${p.locationInfo?`<p>ⓘ ${masterEsc(p.locationInfo)}</p>`:''}</div>
+       <div class="profile-map-wrap"><div class="master-map-preview exact-map"><div><b>📍 ${masterEsc(p.address||p.area||'Бишкек')}</b>${p.area?`<span>Район: ${masterEsc(p.area)}</span>`:''}</div></div></div>
      </section>
    </main>
  </div>${nav('profile')}`;
@@ -1062,10 +1086,10 @@ function renderAnalytics(){
      const t=bookingTime(b);
      return t>=fromMs&&t<=nowMs;
    });
-   const confirmed=rows.filter(b=>b.status==='confirmed');
+   const confirmed=rows.filter(b=>b.status==='confirmed'||b.status==='completed'||b.status==='done');
    const cancelled=rows.filter(b=>b.status==='cancelled');
    const pending=rows.filter(b=>b.status==='pending');
-   const completed=confirmed.filter(b=>bookingTime(b)<nowMs);
+   const completed=confirmed.filter(b=>b.status==='completed'||b.status==='done'||bookingTime(b)<nowMs);
 
    const serviceList=services();
    const priceByService=Object.fromEntries(serviceList.map(s=>[
@@ -1289,11 +1313,11 @@ document.addEventListener('click',e=>{
   }
 });
 
-window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await Promise.all([PNBackendSync.hydrateMasterCache(),pnHydrateMasterSupport()]);const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
+window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await PNBackendSync.hydrateMasterCache();masterScheduleConfig=jget('pn_master_schedule_config',masterScheduleConfig);await Promise.all([pnHydrateMasterChatsFromBackend(),pnHydrateMasterSupport()]);const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
 window.addEventListener('DOMContentLoaded',()=>{
  if(window.PNRealtime)PNRealtime.watchMaster(async()=>{
   try{
-   await Promise.all([PNBackendSync?.hydrateMasterCache?.(),pnHydrateMasterSupport()]);
+   await PNBackendSync?.hydrateMasterCache?.();masterScheduleConfig=jget('pn_master_schedule_config',masterScheduleConfig);await Promise.all([pnHydrateMasterChatsFromBackend(),pnHydrateMasterSupport()]);
    const f=location.pathname.split('/').pop();
    if(f==='master.html')renderDashboard();
    else if(f==='master-profile.html')renderProfile();

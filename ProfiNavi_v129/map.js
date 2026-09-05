@@ -1,32 +1,10 @@
 
-(function(){
- try{
-  const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
-  if(cp && window.masters && masters[0]){
-   const lat=Number(cp.lat??cp.latitude),lng=Number(cp.lng??cp.longitude);
-   if(Number.isFinite(lat)&&Number.isFinite(lng)){masters[0].lat=lat;masters[0].lng=lng;}
-   if(cp.address)masters[0].address=cp.address;
-   if(cp.area)masters[0].district=cp.area;
-   if(cp.profileName||cp.name)masters[0].name=cp.profileName||cp.name;
-  }
- }catch(e){}
-})();
-
 const mapAreas=['center','jal','microdistricts','asia','asia','polytech','alamedin','east','microdistricts','center','center'];
 const mapAvailability=[['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow']];
 const masters=window.PNCloneMasters().map((m,id)=>({...m,id,services:[m.cat],area:mapAreas[id]||'center',priceValue:Number.parseInt(String(m.price).replace(/\D/g,''),10)||0,price:m.price,available:mapAvailability[id]||['tomorrow'],rating:Number(m.rating)||0}));
 window.masters=masters;
-
-
-try{
- const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
- if(cp && masters[0]){
-   if(cp.profileName||cp.name) masters[0].name=cp.profileName||cp.name;
-   if(cp.area||cp.address) masters[0].district=[cp.area,cp.address].filter(Boolean).join(' · ');
-   if(Number.isFinite(Number(cp.lat))) masters[0].lat=Number(cp.lat);
-   if(Number.isFinite(Number(cp.lng))) masters[0].lng=Number(cp.lng);
- }
-}catch(e){}
+function mapEsc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
+function dynamicAreaOptions(){return [...new Set(masters.filter(Boolean).map(m=>String(m.area||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru')).map(x=>[x,x])}
 
 let map, markers=[], userMarker, userLocation;
 const filters={priceMin:0,priceMax:null,date:'all',areas:new Set(),services:new Set()};
@@ -49,12 +27,17 @@ function label(d){return d<1?`${Math.max(1,Math.round(d*1000))} м`:`${d.toFixed
 function masterCategoryKeys(m){const a=Array.isArray(m.categories)&&m.categories.length?m.categories:[m.cat];return a.filter(x=>typeof x==='string')}
 function categoryLabel(m){return masterCategoryKeys(m).map(x=>serviceLabels[x]||x).join(' · ')}
 function anyFilters(){return filters.priceMin>0||filters.priceMax!==null||filters.date!=='all'||filters.areas.size||filters.services.size}
+function masterPriceValues(m){
+ const vals=(Array.isArray(m.services)?m.services:[]).map(s=>{const old=Number(s.oldPrice??s.price);const np=s.newPrice==null?null:Number(s.newPrice);if(Number.isFinite(np)&&np>=0&&(!Number.isFinite(old)||np<old))return np;if(Number.isFinite(old))return old;const n=Number.parseInt(String(s.price||'').replace(/\D/g,''),10);return Number.isFinite(n)?n:null}).filter(Number.isFinite);
+ if(vals.length)return vals;return [Number(m.priceValue)||0];
+}
 function visible(){
  let list=masters.filter(m=>{
-   if(m.priceValue<filters.priceMin)return false;
-   if(filters.priceMax!==null&&m.priceValue>filters.priceMax)return false;
+   const prices=masterPriceValues(m);
+   if(!prices.some(v=>v>=filters.priceMin&&(filters.priceMax===null||v<=filters.priceMax)))return false;
    if(filters.date==='today'&&!m.available.includes('today'))return false;
    if(filters.date==='tomorrow'&&!m.available.includes('tomorrow'))return false;
+   if(filters.date==='week'&&!m.available.includes('week'))return false;
    if(filters.areas.size&&!filters.areas.has(m.area))return false;
    if(filters.services.size&&!masterCategoryKeys(m).some(s=>filters.services.has(s)))return false;
    return true;
@@ -69,11 +52,11 @@ function renderSheet(){
  if(masterStrip){
    masterStrip.innerHTML=list.length?list.map(m=>{
      const service=serviceLabels[m.services[0]]||'Услуга';
-     return `<button class="map-strip-card" type="button" data-master-id="${m.id}" aria-label="Открыть профиль ${m.name}">
+     return `<button class="map-strip-card" type="button" data-master-id="${m.id}" aria-label="Открыть профиль ${mapEsc(m.name)}">
        <img src="${m.avatar}" alt="">
        <span class="map-strip-copy">
-         <span class="map-strip-name"><b>${m.name}</b><em>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</em></span>
-         <span class="map-strip-service"><span>${service}</span><strong>${m.price}</strong></span>
+         <span class="map-strip-name"><b>${mapEsc(m.name)}</b><em>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</em></span>
+         <span class="map-strip-service"><span>${mapEsc(service)}</span><strong>${mapEsc(m.price)}</strong></span>
        </span>
      </button>`;
    }).join(''):`<div style="padding:18px;text-align:center;width:100%"><b>Пока нет мастеров</b><br><small>После публикации мастер появится на карте.</small></div>`;
@@ -91,16 +74,16 @@ function renderSheet(){
 function showMasterCard(m){
  if(!selectedCard)return;
  const distance=userLocation?` · ${label(km(userLocation.lat,userLocation.lng,m.lat,m.lng))}`:'';
- const available=m.available.includes('today')?'Свободно сегодня':'Свободно завтра';
+ const available=m.available.includes('today')?'Свободно сегодня':m.available.includes('tomorrow')?'Свободно завтра':m.available.includes('week')?'Есть свободные окна':'Нет свободных окон';
  selectedCard.dataset.masterId=m.id;
- selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${m.avatar}" alt="${m.name}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${m.name} · ${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</b><small>${categoryLabel(m)} · ${m.district}${distance}</small><strong>${m.price} · ${available}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
+ selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${m.avatar}" alt="${mapEsc(m.name)}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${mapEsc(m.name)} · ${mapEsc(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1)))}</b><small>${mapEsc(categoryLabel(m))} · ${mapEsc(m.district)}${mapEsc(distance)}</small><strong>${mapEsc(m.price)} · ${mapEsc(available)}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
  selectedCard.classList.remove('hidden');
  selectedCard.querySelector('.map-selected-master-close').onclick=()=>selectedCard.classList.add('hidden');
  selectedCard.querySelector('.map-selected-master-copy').onclick=()=>location.href=`profile.html?id=${m.id}`;
  selectedCard.querySelector('.map-selected-master-action').onclick=()=>location.href=`booking.html?master=${m.id}`;
 }
 function clearMarkers(){markers.forEach(x=>map.removeLayer(x));markers=[]}
-function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${m.avatar}" alt=""><span>${m.name}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
+function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${m.avatar}" alt=""><span>${mapEsc(m.name)}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
 function renderMarkers(){if(!map){renderSheet();return}clearMarkers();visible().forEach(m=>{const marker=L.marker([m.lat,m.lng],{icon:makeIcon(m)}).addTo(map);marker.on('click',()=>{showMasterCard(m);const card=masterStrip?.querySelector(`[data-master-id="${m.id}"]`);if(card){masterStrip.querySelectorAll('.map-strip-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');card.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}});markers.push(marker)});renderSheet();fitAll();updateTriggerLabels()}
 function fitAll(){if(!map)return;const pts=visible().map(m=>[m.lat,m.lng]);if(userLocation)pts.unshift([userLocation.lat,userLocation.lng]);if(pts.length)map.fitBounds(pts,{paddingTopLeft:[35,35],paddingBottomRight:[35,35],maxZoom:14})}
 function requestLocation(){if(!navigator.geolocation){statusEl.textContent='Мастера на карте Бишкека';return}navigator.geolocation.getCurrentPosition(p=>{userLocation={lat:p.coords.latitude,lng:p.coords.longitude};statusEl.textContent='Показываем мастеров рядом с вами';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker([userLocation.lat,userLocation.lng],{radius:9,weight:4,color:'#fff',fillColor:'#2f80ed',fillOpacity:1}).addTo(map);renderMarkers()},e=>{statusEl.textContent=e.code===1?'Мастера на карте Бишкека':'Мастера показаны на карте Бишкека';fitAll()},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
@@ -146,7 +129,8 @@ function openFilter(kind){
    minInput.oninput=()=>sync('min');maxInput.oninput=()=>sync('max');sync();
  }else{
    draft=kind==='area'?new Set(filters.areas):kind==='service'?new Set(filters.services):filters[kind];
-   filterContent.innerHTML=c.options.map(([value,text])=>{const checked=c.type==='radio'?draft===value:draft.has(value);return `<label class="filter-option"><span>${text}</span><input type="${c.type}" name="filter-${kind}" value="${value}" ${checked?'checked':''}><i></i></label>`}).join('');
+   const options=kind==='area'?dynamicAreaOptions():c.options;
+   filterContent.innerHTML=options.length?options.map(([value,text])=>{const checked=c.type==='radio'?draft===value:draft.has(value);return `<label class="filter-option"><span>${mapEsc(text)}</span><input type="${c.type}" name="filter-${kind}" value="${mapEsc(value)}" ${checked?'checked':''}><i></i></label>`}).join(''):'<div style="padding:18px;text-align:center;color:#8b7d84">Районы появятся после публикации мастеров.</div>';
    filterContent.querySelectorAll('input').forEach(input=>input.onchange=()=>{if(c.type==='radio')draft=input.value;else input.checked?draft.add(input.value):draft.delete(input.value)});
  }
  document.getElementById('applyCurrentFilter').textContent='Показать';
@@ -170,18 +154,6 @@ document.getElementById('closeFilterSheet').onclick=closeFilter;filterBackdrop.o
 document.getElementById('clearCurrentFilter').onclick=()=>{if(currentSheet==='area'||currentSheet==='service')draft=new Set();else if(currentSheet==='price'){filters.priceMin=0;filters.priceMax=null;}else draft='all';openFilter(currentSheet)};
 resetBtn.onclick=()=>{filters.priceMin=0;filters.priceMax=null;filters.date='all';filters.areas.clear();filters.services.clear();renderMarkers()};
 renderSheet();updateTriggerLabels();loadMap();
-
-window.addEventListener('pageshow',()=>{
- try{
-  const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
-  if(cp&&window.masters&&masters[0]){
-   const lat=Number(cp.lat??cp.latitude),lng=Number(cp.lng??cp.longitude);
-   if(Number.isFinite(lat)&&Number.isFinite(lng)){masters[0].lat=lat;masters[0].lng=lng;}
-  }
- }catch(e){}
-});
-
-window.addEventListener('DOMContentLoaded',()=>setTimeout(async()=>{try{const b=await window.PNBackendSync?.hydratePublicMasterCache?.(0);if(!b)return;const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}');const m=masters[0];if(cp.name)m.name=cp.name;if(cp.avatar)m.avatar=cp.avatar;if(cp.area||cp.address)m.district=[cp.area,cp.address].filter(Boolean).join(' · ');if(Number.isFinite(Number(cp.lat)))m.lat=Number(cp.lat);if(Number.isFinite(Number(cp.lng)))m.lng=Number(cp.lng);if(cp.rating)m.rating=Number(cp.rating)||m.rating;renderMarkers();}catch(e){console.warn('public map sync',e)}},120));
 
 
 async function pnHydrateMapDirectory(){

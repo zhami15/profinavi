@@ -1,13 +1,14 @@
 const q=new URLSearchParams(location.search);
-const master=q.get('master')||'0', service=q.get('service')||'Услуга', time=q.get('time')||'', date=new Date(q.get('date')||Date.now());
+const master=q.get('master')||'0', service=q.get('service')||'Услуга', serviceId=q.get('serviceId')||'', time=q.get('time')||'', date=new Date(q.get('date')||Date.now());
+const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const baseMasters=window.PNCloneMasters();
 const names=baseMasters.map(x=>x.name);
 try{const id=Number(master);const cached=JSON.parse(localStorage.getItem(`pn_dynamic_master_${id}`)||'null');if(cached)names[id]=cached.name}catch(e){}
 const dateText=date.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
-document.getElementById('confirmContent').innerHTML=`<header class="booking-head"><button class="booking-close" onclick="history.back()">‹</button><h1>Подтверждение</h1><span></span></header><section class="booking-confirm-card"><div class="confirm-icon">✓</div><h2>Проверьте запись</h2><dl><div><dt>Мастер</dt><dd>${names[Number(master)]||names[0]}</dd></div><div><dt>Услуга</dt><dd>${service}</dd></div><div><dt>Дата</dt><dd>${dateText}</dd></div><div><dt>Время</dt><dd>${time}</dd></div></dl><label>Комментарий мастеру<textarea placeholder="Например: хочу короткую форму и нежный дизайн"></textarea></label><button onclick="finishBooking()">Подтвердить запись</button></section>`;
+document.getElementById('confirmContent').innerHTML=`<header class="booking-head"><button class="booking-close" onclick="history.back()">‹</button><h1>Подтверждение</h1><span></span></header><section class="booking-confirm-card"><div class="confirm-icon">✓</div><h2>Проверьте запись</h2><dl><div><dt>Мастер</dt><dd>${esc(names[Number(master)]||names[0]||'Мастер ProfiNavi')}</dd></div><div><dt>Услуга</dt><dd>${esc(service)}</dd></div><div><dt>Дата</dt><dd>${dateText}</dd></div><div><dt>Время</dt><dd>${time}</dd></div></dl><button onclick="finishBooking()">Подтвердить запись</button></section>`;
 async function completeBooking(){
  const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
- const masterName=names[Number(master)]||names[0];
+ const masterName=names[Number(master)]||names[0]||'Мастер ProfiNavi';
  const rawDate=q.get('date')||new Date().toISOString();
  const baseDate=new Date(rawDate);
  if(Number.isNaN(baseDate.getTime())){
@@ -26,7 +27,7 @@ async function completeBooking(){
  let dbRow;
  try{
    if(!window.PNData)throw new Error('База данных не загрузилась');
-   dbRow=await window.PNData.createBooking({master:Number(master),masterName,service,startsAt:startsAt.toISOString(),price:0});
+   dbRow=await window.PNData.createBooking({master:Number(master),masterName,service,serviceId:serviceId||null,startsAt:startsAt.toISOString(),price:0});
  }catch(e){
    alert('Не удалось сохранить запись в базе: '+e.message);
    return;
@@ -36,10 +37,14 @@ async function completeBooking(){
    master:Number(master),
    masterName,
    service,
-   date:date.toISOString(),
+   serviceId:dbRow.service_id||serviceId||null,
+   date:dbRow.starts_at||startsAt.toISOString(),
+   endsAt:dbRow.ends_at||null,
+   durationMinutes:Number(dbRow.duration_minutes)||null,
+   price:Number(dbRow.price)||0,
    dateText,
    time,
-   status:'pending',
+   status:dbRow.status||'pending',
    clientName:user.name||'Клиент ProfiNavi',
    createdAt:dbRow.created_at||new Date().toISOString(),
    syncedToSupabase:true
@@ -68,7 +73,8 @@ async function finishBooking(){
      if(synced&&synced.name){ await completeBooking(); return; }
    }catch(e){ console.warn('Supabase auth unavailable:',e); }
  }
- location.href='client-login.html?return=booking-confirm.html';
+ const returnUrl='booking-confirm.html'+location.search;
+ location.href='client-login.html?return='+encodeURIComponent(returnUrl);
 }
 
 let authMethod='';

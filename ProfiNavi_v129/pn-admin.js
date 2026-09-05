@@ -17,7 +17,7 @@
   async function requireAdmin(){
     try{return await ensureRole()}catch(e){
       console.warn('Admin guard:',e);
-      try{await sb.auth.signOut({scope:'local'})}catch(_){ }
+      try{await window.PNAuth?.signOut?.()}catch(_){try{await sb.auth.signOut({scope:'local'})}catch(__){}}
       location.replace('admin-login.html');throw e;
     }
   }
@@ -116,6 +116,6 @@
   }
   async function sendSupportMessage(threadId,body){const u=await ensureRole();const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');const r=await sb.from('support_messages').insert({thread_id:threadId,sender_id:u.id,body:text}).select().single();if(r.error)throw r.error;return r.data}
   async function markSupportRead(threadId){const u=await ensureRole();const r=await sb.from('support_reads').upsert({thread_id:threadId,user_id:u.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(r.error)throw r.error}
-  async function logout(){await sb.auth.signOut({scope:'local'});location.replace('admin-login.html')}
+  async function logout(){try{await window.PNAuth?.signOut?.()}catch(e){try{await sb.auth.signOut({scope:'local'})}catch(_){}}location.replace('admin-login.html')}
   window.PNAdmin={esc,normalizePhone,user,ensureRole,requireAdmin,listMasters,loadMaster,log,uploadMaster:(uid,file,kind)=>upload('master-media',uid,file,kind),uploadService:(uid,file)=>upload('service-media',uid,file,'service'),saveProfile,saveService,addService,addWork,deleteWork,replaceSchedule,listSupportThreads,loadSupportThread,sendSupportMessage,markSupportRead,logout};
 })();

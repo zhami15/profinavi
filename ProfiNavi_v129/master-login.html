@@ -50,7 +50,7 @@ function bindPhone(id){
   el.addEventListener('input',()=>{el.value=formatLocal(el.value)});
 }
 
-const $=id=>document.getElementById(id);let pending=null;
+const $=id=>document.getElementById(id);let pending=null;const masterAuthParams=new URLSearchParams(location.search);const masterReturn=window.PNSafeReturnPath?PNSafeReturnPath(masterAuthParams.get('return'),'master.html'):'master.html';
 function prepareMasterCache(userId){
  const owner=localStorage.getItem('pn_master_cache_owner');
  if(owner!==String(userId)){
@@ -80,7 +80,7 @@ async function finishMasterLogin(user){
  localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:personalName,test:!!window.PN_TEST_MODE,supabase:true}));
  let lp={};try{lp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
  lp={...lp,name:mp.profile_name||lp.name||personalName,ownerName:personalName,profileName:mp.profile_name||lp.name||personalName,city:mp.city||'Бишкек',address:mp.address||'',area:mp.area||'',categories:mp.categories||[],lat:Number(mp.latitude)||lp.lat,lng:Number(mp.longitude)||lp.lng,avatar:mp.avatar_url||lp.avatar,cover:mp.cover_url||lp.cover,about:mp.bio||lp.about,experience:mp.experience_text||lp.experience,strengths:mp.strengths_tags||lp.strengths||[],payment:mp.payment||lp.payment,locationInfo:mp.location_info||lp.locationInfo,is_published:!!mp.is_published,user_id:user.id,legacy_id:mp.legacy_id};
- localStorage.setItem('pn_master_profile_0',JSON.stringify(lp));localStorage.setItem('pn_last_mode','master');location.href='master.html';
+ localStorage.setItem('pn_master_profile_0',JSON.stringify(lp));localStorage.setItem('pn_last_mode','master');location.href=masterReturn;
 }
 
 $('loginBtn').onclick=async()=>{
@@ -118,7 +118,7 @@ $('verifyBtn').onclick=async()=>{
    localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:pending.name,test:!!window.PN_TEST_MODE,supabase:true}));localStorage.setItem('pn_last_mode','master');
    let profile={};try{profile=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
    profile={...profile,name:pending.profileName,profileName:pending.profileName,ownerName:pending.name,city:pending.city,area:pending.area||'',address:pending.address,categories:pending.categories,lat:pending.lat,lng:pending.lng,is_published:false,user_id:user.id};
-   localStorage.setItem('pn_master_profile_0',JSON.stringify(profile));location.href='master.html';
+   localStorage.setItem('pn_master_profile_0',JSON.stringify(profile));location.href=masterReturn;
  }catch(e){alert((pending.mode==='register'?'Не удалось зарегистрировать мастера: ':'Не удалось войти: ')+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
 };
 </script>

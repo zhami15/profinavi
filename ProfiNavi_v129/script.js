@@ -23,6 +23,7 @@
 
 const masters=window.PNCloneMasters();
 window.masters=masters;
+function pnEscHtml(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
 const masterWorkSets=window.PN_MASTER_WORK_SETS.map(x=>[...x]);
 
 
@@ -105,7 +106,7 @@ function serviceOfferMarkup(offer){
 }
 
 
-let current='all';let activeChat=0;let availabilityDate='';
+let current='all';let availabilityDate='';
 const masterAvailability={};
 const quickDateMeta={};
 function localDateKey(date){
@@ -350,7 +351,7 @@ function updateStats(){
 }
 function galleryItems(m){
  const images=m.gallery||Array.from({length:6},(_,i)=>m.avatar);
- return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb"><img src="${src}" alt="Работа ${m.name} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
+ return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb"><img src="${src}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
 }
 function serviceItems(m){
  const list=m.services||[{name:m.cat==='lashes'?'Наращивание ресниц':'Основная услуга',desc:m.desc,price:m.price,time:'1,5 ч.'}];
@@ -404,19 +405,19 @@ function serviceItems(m){
      onclick="event.stopPropagation();openServiceProfile(${mi},${originalIndex})"
      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openServiceProfile(${mi},${originalIndex})}">
      <div class="service-preview-image-wrap ${hasOwnImage?'':'no-service-image'}">
-       <img src="${image}" alt="${hasOwnImage?x.name:'Нет фото'}">
+       <img src="${image}" alt="${hasOwnImage?pnEscHtml(x.name):'Нет фото'}">
        ${oldPrice!==null && finalPrice<oldPrice && discount?`<span class="service-image-discount">-${discount}%</span>`:''}
      </div>
 
      <div class="service-preview-copy">
-       <div class="service-offer-line">${label?`<span class="service-promo-badge">${label}</span>`:''}</div>
-       <b>${x.name||'Услуга'}</b>
-       <p class="service-preview-desc">${x.desc||''}</p>
+       <div class="service-offer-line">${label?`<span class="service-promo-badge">${pnEscHtml(label)}</span>`:''}</div>
+       <b>${pnEscHtml(x.name||'Услуга')}</b>
+       <p class="service-preview-desc">${pnEscHtml(x.desc||'')}</p>
        <div class="service-preview-price">
          <strong class="${hasDiscount?'promo-price':'regular-price'}">${finalPrice} сом</strong>
          ${oldPrice!==null?`<span class="old-service-price">${oldPrice} сом</span>`:''}
        </div>
-       <small>◷ ${x.time||''}</small>
+       <small>◷ ${pnEscHtml(x.time||'')}</small>
      </div>
    </div>`;
  }).join('');
@@ -440,12 +441,11 @@ function render(){
  document.getElementById('countText').textContent=`Найдено: ${data.length}`;
  grid.innerHTML=data.length?data.map((m)=>{const i=masters.indexOf(m);return `<article class="master-card" onclick="openProfile(${i})">
   <div class="master-card-head">
-   <div class="master-identity"><img class="master-avatar" src="${m.avatar}" alt="Фото ${m.name}"><div><div class="name">${m.name}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${m.area||'не указан'}</span></div></div></div>
+   <div class="master-identity"><img class="master-avatar" src="${m.avatar}" alt="Фото ${pnEscHtml(m.name)}"><div><div class="name">${pnEscHtml(m.name)}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${pnEscHtml(m.area||'не указан')}</span></div></div></div>
    <div class="save-wrap"><button class="fav-card" aria-label="Сохранить мастера" onclick="event.stopPropagation();toggleFav(${i})">${favs.includes(i)?'♥':'♡'}</button><small>${m.saves+(favs.includes(i)?1:0)} сохранений</small></div>
   </div>
   <div class="works-carousel">${galleryItems(m)}</div>
   <div class="services-carousel">${serviceItems(m)}</div>
-  </div>
  </article>`}).join(''):`<div class="favorites-empty pn-directory-empty"><b>✦</b><h3>Пока нет мастеров</h3><p>Опубликованные мастера появятся здесь автоматически.</p></div>`;updateStats();
 }
 function toggleFav(i){const favs=getFavs();const pos=favs.indexOf(i);pos>=0?favs.splice(pos,1):favs.push(i);setFavs(favs);render();renderFavorites();}
@@ -463,49 +463,6 @@ document.getElementById('mapToggle')?.addEventListener('click',()=>{window.locat
 document.getElementById('homeMapOpen')?.addEventListener('click',(event)=>{event.stopPropagation();window.location.href='map.html'});
 /* v87: home map uses Leaflet/OpenStreetMap only */
 document.querySelectorAll('.pin').forEach(p=>p.onclick=()=>openProfile(Number(p.dataset.master)));
-function profileGallery(m){
- const images=(m.gallery||[m.avatar]).slice(0,10);
- return images.map((src,j)=>`<button class="profile-grid-item" onclick="openLightbox('${src}')"><img src="${src}" alt="Работа ${j+1}"><span>${j<3?'✦':''}</span></button>`).join('');
-}
-function profileMenu(m){
- const list=m.services||[{name:'Основная услуга',desc:'',price:m.price,time:'1,5 ч.'}];
- const mi=masters.indexOf(m);
- return list.map((x,j)=>{
-  const offer=getServiceOffer(mi,j,x);
-  const safeName=x.name.replace(/'/g,"\'");
-  return `<article class="full-menu-card">
-   <img src="${(m.gallery&&m.gallery[j%m.gallery.length])||m.avatar}" alt="${x.name}">
-   <div class="full-menu-info"><div class="service-offer-line">${serviceOfferMarkup(offer)}</div><h3>${x.name}</h3>${x.desc?`<p>${x.desc}</p>`:''}<div class="service-price-row"><strong class="${offer.label?'promo-price':'regular-price'}">${offer.price}</strong>${offer.oldPrice?`<span class="old-service-price">${offer.oldPrice}</span>`:''}</div><small>${x.time}</small></div>
-   <button class="service-book-btn profile-service-book" onclick="event.stopPropagation();showBooking(${mi},'${safeName}')">Записаться</button>
-  </article>`;
- }).join('');
-}
-function openProfile(i){
- window.location.href=`profile.html?id=${encodeURIComponent(i)}`;
-}
-function openServiceProfile(masterIndex,serviceIndex){
- const params=new URLSearchParams({id:String(masterIndex),service:String(serviceIndex)});
- window.location.href=`profile.html?${params.toString()}#menu`;
-}
-function bindProfileTabs(){
- document.querySelectorAll('#profileTabs button').forEach(btn=>btn.onclick=()=>{
-  document.querySelectorAll('#profileTabs button').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.profile-pane').forEach(x=>x.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelector(`.profile-pane[data-pane="${btn.dataset.tab}"]`)?.classList.add('active');
-  document.querySelector('.profile-modal-card')?.scrollTo({top:document.querySelector('#profileTabs').offsetTop-5,behavior:'smooth'});
- });
-}
-function showBooking(i,service){
- const m=masters[i];
- alert(`Запись к ${m.name}\nУслуга: ${service}\n\nВ следующей версии здесь будет календарь свободного времени. После подтверждения записи откроется чат.`);
-}
-function openLightbox(src){window.open(src,'_blank');}
-function openChat(i){activeChat=i;const m=masters[i];document.getElementById('chatAvatar').textContent=m.emoji;document.getElementById('chatName').textContent=m.name;openModal('chatModal');renderChat();}
-function renderChat(){const chats=getChats();const key=String(activeChat);if(!chats[key]) chats[key]=[{from:'master',text:'Здравствуйте 💕 Напишите, какую услугу хотите и на какую дату.'}];setChats(chats);document.getElementById('chatMessages').innerHTML=chats[key].map(x=>`<div class="bubble ${x.from}">${x.text}</div>`).join('');document.getElementById('chatMessages').scrollTop=99999;updateStats();}
-function sendMsg(text){if(!text.trim())return;const chats=getChats();const key=String(activeChat);if(!chats[key])chats[key]=[];chats[key].push({from:'user',text:text.trim()});chats[key].push({from:'master',text:'Спасибо! В демо это автоответ. В реальном сайте мастер получит сообщение.'});setChats(chats);renderChat();}
-document.getElementById('chatForm')?.addEventListener('submit',e=>{e.preventDefault();const input=document.getElementById('chatInput');if(!input)return;sendMsg(input.value);input.value='';});
-document.querySelectorAll('.quick-replies button').forEach(b=>b.onclick=()=>sendMsg(b.dataset.msg));
 function openModal(id){document.getElementById(id).classList.remove('hidden')}function closeModal(id){document.getElementById(id).classList.add('hidden')}
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.add('hidden')});
 document.getElementById('openAccount')?.addEventListener('click',()=>{openModal('accountModal')});
@@ -573,6 +530,11 @@ function pnMasterForBooking(b){
   experience:''
  };
 }
+async function pnCancelClientBooking(id){
+ const list=getBookings(),b=list.find(x=>String(x.id)===String(id));if(!b||b.status==='cancelled'||b.status==='completed'||b.status==='done')return;
+ if(!confirm('Отменить эту запись?'))return;
+ try{if(b.syncedToSupabase&&window.PNData)await PNData.updateBookingStatus(b.id,'cancelled');b.status='cancelled';b.cancelledAt=new Date().toISOString();localStorage.setItem('pn_bookings',JSON.stringify(list));renderUpcomingBooking();try{await pnHydrateClientData()}catch(_){}}catch(e){alert('Не удалось отменить запись: '+e.message)}
+}
 function renderUpcomingBooking(){
  const box=document.getElementById('upcomingBooking'); if(!box)return;
  const bookings=getBookings().slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -583,10 +545,12 @@ function renderUpcomingBooking(){
   const cancelled=b.status==='cancelled';
   const id=b.id||String(idx);
   const expired=isChatExpired(b);
-  const statusText=cancelled?'Отклонено':expired?'Чат завершён':b.status==='completed'||b.status==='done'?'Завершено':confirmed?'Подтверждено':'Ожидает подтверждения';
+  const statusText=cancelled?'Отменено':b.status==='completed'||b.status==='done'?'Завершено':expired?'Чат завершён':confirmed?'Подтверждено':'Ожидает подтверждения';
   const statusClass=cancelled?'cancelled':expired?'expired':confirmed?'confirmed':'pending';
   const chatAction=confirmed?`<a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>`:'';
-  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div>${chatAction?`<div class="booking-home-actions">${chatAction}</div>`:''}<p class="booking-home-note">${cancelled?'Запись отклонена. Выберите другое свободное время.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Ожидаем подтверждения мастера. Чат откроется после подтверждения записи.'}</p></article>`
+  const canCancel=!cancelled&&!['completed','done'].includes(b.status)&&bookingDateTime(b)&&bookingDateTime(b).getTime()>Date.now();
+  const cancelAction=canCancel?`<button class="light" type="button" onclick="pnCancelClientBooking('${id}')">Отменить запись</button>`:'';
+  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${pnEscHtml(m.name)}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${pnEscHtml(m.name)}</button><p><b>${pnEscHtml(b.dateText||'')} · ${pnEscHtml(b.time||'')}</b></p><p>${pnEscHtml(b.service||'Услуга')}</p></div></div>${chatAction||cancelAction?`<div class="booking-home-actions">${chatAction}${cancelAction}</div>`:''}<p class="booking-home-note">${cancelled?'Запись отменена. Выберите другое свободное время.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Ожидаем подтверждения мастера. Чат откроется после подтверждения записи.'}</p></article>`
  }).join('')}</div>`;
 }
 
@@ -844,12 +808,13 @@ function pnBookingFinished(b){
 }
 function pnOpenRatingPopup(booking){
  if(!booking || pnHasReview(booking.id) || document.getElementById('pnRatingOverlay')) return;
- const m=masters[Number(booking.master)]||masters[0];
+ const m=pnMasterForBooking(booking);
+ if(!m)return;
  const ov=document.createElement('div');ov.id='pnRatingOverlay';ov.className='pn-rating-overlay';
  ov.innerHTML=`<div class="pn-rating-sheet">
    <button class="pn-rating-close" aria-label="Закрыть">×</button>
-   <div class="pn-rating-avatar"><img src="${m.avatar}" alt="${m.name}"></div>
-   <h2>Как вам услуга?</h2><p class="pn-rating-sub">${m.name} · ${booking.service||'Услуга'}</p>
+   <div class="pn-rating-avatar"><img src="${m.avatar}" alt="${pnEscHtml(m.name)}"></div>
+   <h2>Как вам услуга?</h2><p class="pn-rating-sub">${pnEscHtml(m.name)} · ${pnEscHtml(booking.service||'Услуга')}</p>
    <div class="pn-rating-stars" role="radiogroup" aria-label="Оценка"><button data-rate="1">★</button><button data-rate="2">★</button><button data-rate="3">★</button><button data-rate="4">★</button><button data-rate="5">★</button></div>
    <p class="pn-rating-hint">Поставьте оценку от 1 до 5</p>
    <textarea class="pn-rating-comment" placeholder="Комментарий (необязательно)"></textarea>
@@ -908,7 +873,7 @@ async function pnHydrateClientData(){
   const reviewedIds=new Set((reviews||[]).map(r=>String(r.booking_id)));
   const mapped=(rows||[]).map(r=>{
    const dt=new Date(r.starts_at);const status=r.status==='approved'?'confirmed':r.status==='declined'?'cancelled':r.status;
-   return {id:r.id,master:Number(r.legacy_master_id)||0,masterName:r.master_name||'',service:r.service_name||'Услуга',date:dt.toISOString(),dateText:dt.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}),time:dt.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status,clientName:user.name||'Клиент ProfiNavi',createdAt:r.created_at,syncedToSupabase:true,reviewed:reviewedIds.has(String(r.id))};
+   return {id:r.id,master:Number(r.legacy_master_id)||0,masterName:r.master_name||'',service:r.service_name||'Услуга',serviceId:r.service_id||null,date:dt.toISOString(),endsAt:r.ends_at||null,durationMinutes:Number(r.duration_minutes)||null,price:Number(r.price)||0,dateText:dt.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}),time:dt.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status,clientName:user.name||'Клиент ProfiNavi',createdAt:r.created_at,syncedToSupabase:true,reviewed:reviewedIds.has(String(r.id))};
   });
   localStorage.setItem('pn_bookings',JSON.stringify(mapped));
   const localReviews=(reviews||[]).map(r=>({id:r.id,bookingId:r.booking_id,clientId:user.id,masterId:Number(r.legacy_master_id)||0,name:user.name||'Клиент',rating:r.rating,text:r.text||'',photos:r.photos||[],date:new Date(r.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,syncedToSupabase:true}));
@@ -941,12 +906,6 @@ window.addEventListener('pageshow',()=>setTimeout(pnRefreshVisibleMaps,250));
 window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().catch(()=>{}));
 
 window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>Promise.all([pnHydrateClientData(),pnHydrateSupportUnread()]).catch(()=>{})));
-
-async function pnHydratePublicMasterHome(){
- try{const b=await window.PNBackendSync?.hydratePublicMasterCache?.(0);if(!b)return;applyMasterProSyncToClientHome();render();renderUpcomingBooking();updateStats();}catch(e){console.warn('public master sync',e)}
-}
-window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydratePublicMasterHome,120));
-
 
 async function pnHydrateRankedDirectory(){
  try{

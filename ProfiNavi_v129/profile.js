@@ -39,6 +39,7 @@ function serviceOfferMarkup(offer){
 
 
 const CLIENT_MASTER_REVIEWS=[];
+function pnProfileEsc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
 
 
 function getClientEditableProfile(index){
@@ -52,12 +53,13 @@ function getClientEditableServices(index){
  try{const x=JSON.parse(localStorage.getItem('pn_master_services_0')||'null');return Array.isArray(x)?x:null}catch(e){return null}
 }
 function clientWorkSchedule(p){
- try{
-   const cfg=JSON.parse(localStorage.getItem('pn_master_schedule_config')||'null');
-   if(cfg&&cfg.start&&cfg.end){
-     return `${cfg.days||'Ежедневно'}, ${cfg.start}–${cfg.end}`;
-   }
- }catch(e){}
+ const hasServerSchedule=!!(p?.user_id||p?.scheduleType||p?.openTime||p?.closeTime);
+ if(!hasServerSchedule){
+  try{
+    const cfg=JSON.parse(localStorage.getItem('pn_master_schedule_config')||'null');
+    if(cfg&&cfg.start&&cfg.end)return `${cfg.days||'Ежедневно'}, ${cfg.start}–${cfg.end}`;
+  }catch(e){}
+ }
  const days=p.workDays||[];
  let dayLabel=p.scheduleType||'Ежедневно';
  if(dayLabel==='Выбрать дни') dayLabel=days.length?days.join('/ '):'Дни не выбраны';
@@ -72,10 +74,10 @@ function clientReviewPhoto(src){
 }
 function clientReviewCard(r){
  return `<article class="review-card">
-  <div class="review-top"><div><b>${r.name}</b></div><span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span></div>
+  <div class="review-top"><div><b>${pnProfileEsc(r.name||'Клиент ProfiNavi')}</b></div><span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span></div>
   <small>${r.date||''}</small>
-  ${r.service?`<div class="review-service"><span>Услуга</span><b>${r.service}</b></div>`:''}
-  <p>${r.text||''}</p>
+  ${r.service?`<div class="review-service"><span>Услуга</span><b>${pnProfileEsc(r.service)}</b></div>`:''}
+  <p>${pnProfileEsc(r.text||'')}</p>
   ${r.photos&&r.photos.length?`<div class="review-photo-grid">${r.photos.slice(0,3).map(x=>`<img src="${x}" alt="Фото к отзыву" onclick="clientReviewPhoto('${x}')">`).join('')}</div>`:''}
  </article>`;
 }
@@ -111,16 +113,16 @@ function syncedServiceCard(s,i,m,p){
  const discount=hasNew&&old>0?Math.round((old-final)/old*100):0;
  const promo=s.promo||s._promo||'';
  const img=s.image || 'assets/service-placeholder.svg';
- const serviceName=(s.name||'Услуга').replace(/'/g,"\\'");
+ const encodedService=encodeURIComponent(s.name||'Услуга');
  return `<article class="full-menu-card client-matching-service" id="service-${i}">
-   <img src="${img}" alt="${s.image?(s.name||'Услуга'):'Нет фото'}">
+   <img src="${pnProfileEsc(img)}" alt="${s.image?pnProfileEsc(s.name||'Услуга'):'Нет фото'}">
    <div class="full-menu-info">
-     <div class="service-offer-line">${promo?`<span class="service-promo-badge">${promo}</span>`:''}${discount?`<span class="discount-percent">-${discount}%</span>`:''}</div>
-     <h3>${s.name||'Услуга'}</h3>
+     <div class="service-offer-line">${promo?`<span class="service-promo-badge">${pnProfileEsc(promo)}</span>`:''}${discount?`<span class="discount-percent">-${discount}%</span>`:''}</div>
+     <h3>${pnProfileEsc(s.name||'Услуга')}</h3>
      <div class="service-price-row">${hasNew?`<strong class="promo-price">${final} сом</strong><span class="old-service-price">${old} сом</span>`:`<strong class="regular-price">${old} сом</strong>`}</div>
-     <small>${s.time||''}</small>
+     <small>${pnProfileEsc(s.time||'')}</small>
    </div>
-   <button class="service-book-btn profile-service-book" onclick="showBooking('${serviceName}')">Записаться</button>
+   <button class="service-book-btn profile-service-book" onclick="showBooking(decodeURIComponent('${encodedService}'))">Записаться</button>
  </article>`;
 }
 
@@ -130,20 +132,20 @@ const requestedServiceIndex=Number(params.get('service'));
 const hasRequestedService=Number.isInteger(requestedServiceIndex)&&requestedServiceIndex>=0;
 if(!Number.isInteger(masterIndex)||masterIndex<0) masterIndex=0;
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
-const setFavs=v=>localStorage.setItem('pn_favs',JSON.stringify(v));
+const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
 function profileGallery(m){
  const images=(m.gallery||Array.from({length:9},()=>m.avatar)).slice(0,10);
- return images.map((src,j)=>`<button class="profile-grid-item" onclick="window.open('${src}','_blank')"><img src="${src}" alt="Работа ${j+1}"><span>${j<3?'✦':''}</span></button>`).join('');
+ return images.map((src,j)=>{const u=encodeURIComponent(src);return `<button class="profile-grid-item" onclick="window.open(decodeURIComponent('${u}'),'_blank','noopener')"><img src="${pnProfileEsc(src)}" alt="Работа ${j+1}"><span>${j<3?'✦':''}</span></button>`}).join('');
 }
 function profileMenu(m){
  const list=m.services||[{name:'Основная услуга',desc:'',price:m.price,time:'1,5 ч.'}];
  return list.map((x,j)=>{
   const offer=getServiceOffer(masterIndex,j,x);
-  const safeName=x.name.replace(/'/g,"\'");
+  const encodedName=encodeURIComponent(x.name||'Услуга'),img=(m.gallery&&m.gallery[j%m.gallery.length])||m.avatar;
   return `<article class="full-menu-card${hasRequestedService&&j===requestedServiceIndex?' requested-service':''}" id="service-${j}">
-   <img src="${(m.gallery&&m.gallery[j%m.gallery.length])||m.avatar}" alt="${x.name}">
-   <div class="full-menu-info"><div class="service-offer-line">${serviceOfferMarkup(offer)}</div><h3>${x.name}</h3>${x.desc?`<p>${x.desc}</p>`:''}<div class="service-price-row"><strong class="${offer.label?'promo-price':'regular-price'}">${offer.price}</strong>${offer.oldPrice?`<span class="old-service-price">${offer.oldPrice}</span>`:''}</div><small>${x.time}</small></div>
-   <button class="service-book-btn profile-service-book" onclick="showBooking('${safeName}')">Записаться</button>
+   <img src="${pnProfileEsc(img)}" alt="${pnProfileEsc(x.name||'Услуга')}">
+   <div class="full-menu-info"><div class="service-offer-line">${serviceOfferMarkup({...offer,label:offer.label?pnProfileEsc(offer.label):offer.label})}</div><h3>${pnProfileEsc(x.name||'Услуга')}</h3>${x.desc?`<p>${pnProfileEsc(x.desc)}</p>`:''}<div class="service-price-row"><strong class="${offer.label?'promo-price':'regular-price'}">${pnProfileEsc(offer.price)}</strong>${offer.oldPrice?`<span class="old-service-price">${pnProfileEsc(offer.oldPrice)}</span>`:''}</div><small>${pnProfileEsc(x.time||'')}</small></div>
+   <button class="service-book-btn profile-service-book" onclick="showBooking(decodeURIComponent('${encodedName}'))">Записаться</button>
   </article>`;
  }).join('');
 }
@@ -181,17 +183,17 @@ function renderProfile(){
   <div class="profile-screen client-exact-profile">
    <header class="profile-screen-head">
     <button class="profile-back" onclick="history.length>1?history.back():location.href='client.html'" aria-label="Назад">‹</button>
-    <div class="profile-head-title"><img src="${avatar}" alt="${name}"><b>${name}</b></div>
+    <div class="profile-head-title"><img src="${pnProfileEsc(avatar)}" alt="${pnProfileEsc(name)}"><b>${pnProfileEsc(name)}</b></div>
     <button class="profile-head-fav ${fav?'saved':''}" onclick="toggleFav()" aria-label="Сохранить">${fav?'♥':'♡'}</button>
    </header>
 
    <section class="profile-cover" style="background-image:url('${cover}')"></section>
 
    <section class="profile-summary-card">
-    <img class="profile-main-avatar" src="${avatar}" alt="Фото ${name}">
+    <img class="profile-main-avatar" src="${pnProfileEsc(avatar)}" alt="Фото ${pnProfileEsc(name)}">
     <div class="profile-summary-main">
-      <h1>${name}</h1>
-      <p>${area?`Район: ${area}`:'Район не указан'}</p>
+      <h1>${pnProfileEsc(name)}</h1>
+      <p>${area?`Район: ${pnProfileEsc(area)}`:'Район не указан'}</p>
       <div class="profile-rating"><span>${ratingView}</span><button class="reviews-link" onclick="showClientAllReviews()">${reviews} отзывов</button></div>
     </div>
     <div class="profile-save-count"><button class="profile-big-heart ${fav?'saved':''}" onclick="toggleFav()">${fav?'♥':'♡'}</button><small>${m.saves+(fav?1:0)}<br>сохранений</small></div>
@@ -208,7 +210,7 @@ function renderProfile(){
    <main class="profile-tab-content">
     <section id="works" class="profile-pane profile-section" data-pane="works">
       <div class="master-section-head inline-profile-head"><h2>Работы</h2></div>
-      <div class="profile-gallery-grid">${gallery.map((x,i)=>`<button class="profile-grid-item master-work-simple" onclick="openClientWork('${x}')"><img src="${x}" alt="Работа ${i+1}"></button>`).join('')}</div>
+      <div class="profile-gallery-grid">${gallery.map((x,i)=>{const u=encodeURIComponent(x);return `<button class="profile-grid-item master-work-simple" onclick="openClientWork(decodeURIComponent('${u}'))"><img src="${pnProfileEsc(x)}" alt="Работа ${i+1}"></button>`}).join('')}</div>
     </section>
 
     <section id="menu" class="profile-pane profile-section" data-pane="menu">
@@ -218,8 +220,8 @@ function renderProfile(){
 
     <section id="about" class="profile-pane profile-section" data-pane="about">
       <div class="inline-profile-head"><h2>О мастере</h2></div>
-      <div class="profile-info-block"><h3>Самопрезентация</h3><p>${about||'Мастер пока не добавил описание.'}</p></div>
-      <div class="profile-info-block"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3></div><div class="tag-cloud">${strengths.map(x=>`<span>${x}</span>`).join('')}</div></div>
+      <div class="profile-info-block"><h3>Самопрезентация</h3><p>${pnProfileEsc(about||'Мастер пока не добавил описание.')}</p></div>
+      <div class="profile-info-block"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3></div><div class="tag-cloud">${strengths.map(x=>`<span>${pnProfileEsc(x)}</span>`).join('')}</div></div>
     </section>
 
     <section id="reviews" class="profile-pane profile-section" data-pane="reviews">
@@ -230,15 +232,15 @@ function renderProfile(){
     <section id="salon" class="profile-pane profile-section" data-pane="salon">
       <div class="inline-profile-head"><h2>Адрес и информация</h2></div>
       <div class="salon-photo" style="background-image:url('${gallery[1]||cover}')"></div>
-      <h3>${name}</h3>
+      <h3>${pnProfileEsc(name)}</h3>
       <div class="access-list">
-        <p>◷ ${clientWorkSchedule(p)}</p>
-        <p>₸ ${payment}</p>
-        ${p.locationInfo?`<p>ⓘ ${p.locationInfo}</p>`:''}
+        <p>◷ ${pnProfileEsc(clientWorkSchedule(p))}</p>
+        <p>₸ ${pnProfileEsc(payment)}</p>
+        ${p.locationInfo?`<p>ⓘ ${pnProfileEsc(p.locationInfo)}</p>`:''}
       </div>
       <div class="profile-map-wrap">
         <div id="profileLeafletMap" class="profile-leaflet-map" aria-label="Карта расположения мастера"></div>
-        <div class="profile-map-caption"><b>📍 ${address}</b>${area?`<span>Район: ${area}</span>`:''}</div>
+        <div class="profile-map-caption"><b>📍 ${pnProfileEsc(address)}</b>${area?`<span>Район: ${pnProfileEsc(area)}</span>`:''}</div>
       </div>
     </section>
    </main>
@@ -269,7 +271,7 @@ function initProfileMap(m){
  profileMapInstance=L.map(el,{zoomControl:false,attributionControl:false,scrollWheelZoom:false,tap:true}).setView([m.lat,m.lng],15);
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(profileMapInstance);
  const icon=L.divIcon({className:'profile-map-pin-shell',html:`<div class="profile-map-pin">${m.emoji||'✦'}</div>`,iconSize:[44,52],iconAnchor:[22,48]});
- L.marker([m.lat,m.lng],{icon}).addTo(profileMapInstance).bindPopup(`<b>${m.name}</b><br>${m.district}`);
+ L.marker([m.lat,m.lng],{icon}).addTo(profileMapInstance).bindPopup(`<b>${pnProfileEsc(m.name)}</b><br>${pnProfileEsc(m.district)}`);
  setTimeout(()=>profileMapInstance?.invalidateSize(),80);
 }
 

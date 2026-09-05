@@ -1,5 +1,5 @@
 (()=>{
- const q=new URLSearchParams(location.search),returnTo=q.get('return')||'chats.html';
+ const q=new URLSearchParams(location.search),returnTo=window.PNSafeReturnPath?PNSafeReturnPath(q.get('return'),'chats.html'):'chats.html';
  const box=document.getElementById('supportMessages'),form=document.getElementById('supportForm'),input=document.getElementById('supportInput');
  let user=null,thread=null,channel=null;
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,7 +9,7 @@
    user=await window.PNAuth?.currentUser?.();
    if(user)return true;
    const target=`support-chat.html?return=${encodeURIComponent(returnTo)}`;
-   location.replace(returnTo.includes('master-')?'master-login.html':`client-login.html?return=${encodeURIComponent(target)}`);
+   location.replace(returnTo.includes('master-')?`master-login.html?return=${encodeURIComponent(target)}`:`client-login.html?return=${encodeURIComponent(target)}`);
    return false;
  }
  async function load(){

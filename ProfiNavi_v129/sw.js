@@ -1,4 +1,4 @@
-const CACHE='profinavi-v140-function-audit';
+const CACHE='profinavi-v141-schedule-sync';
 const CORE=[
  './','./index.html','./client.html','./client-login.html','./profile.html','./booking.html','./booking-confirm.html','./chats.html','./chat.html','./favorites.html','./snap.html','./map.html','./support-chat.html',
  './master-login.html','./master.html','./master-profile.html','./master-bookings.html','./master-chats.html','./master-analytics.html',

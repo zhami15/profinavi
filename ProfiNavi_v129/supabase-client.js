@@ -280,16 +280,25 @@ Object.assign(window.PNData,{
  },
  async replaceAvailability(slotMap){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;const today=new Date();today.setHours(0,0,0,0);
-  let step=60;
-  try{
-   const {data:mp}=await pnSupabase.from('master_profiles').select('schedule_config').eq('user_id',uid).maybeSingle();
-   step=Math.max(5,Number(mp?.schedule_config?.step)||Number(JSON.parse(localStorage.getItem('pn_master_schedule_config')||'{}')?.step)||60);
-  }catch(e){try{step=Math.max(5,Number(JSON.parse(localStorage.getItem('pn_master_schedule_config')||'{}')?.step)||60)}catch(_){}}
-  // Never delete future slot rows: booked rows are intentionally kept with
-  // is_available=false so cancellation can reopen the exact same slot later.
+  let cfg={};
+  try{cfg=JSON.parse(localStorage.getItem('pn_master_schedule_config')||'{}')||{}}catch(e){}
+  if(!cfg.start||!cfg.end||!cfg.step){const {data:mp,error:mpErr}=await pnSupabase.from('master_profiles').select('schedule_config').eq('user_id',uid).maybeSingle();if(mpErr)throw mpErr;cfg={...(mp?.schedule_config||{}),...cfg}}
+  const step=Math.max(5,Number(cfg.step)||60);
+  const rowMap=new Map();
+  Object.entries(slotMap||{}).forEach(([date,times])=>(times||[]).forEach(t=>{const [h,m]=String(t).split(':').map(Number);const st=new Date(date+'T00:00:00');st.setHours(h||0,m||0,0,0);const iso=st.toISOString();rowMap.set(iso,{master_id:uid,starts_at:iso,ends_at:new Date(st.getTime()+step*60000).toISOString(),schedule_enabled:true,is_available:true})}));
+
+  // A free-slot cache does not contain booked ticks. Preserve their schedule membership
+  // when they still fit the master's current recurring schedule, so cancellation can reopen them.
+  const {data:activeBookings,error:bookErr}=await pnSupabase.from('bookings').select('starts_at,ends_at,duration_minutes,status').eq('master_id',uid).in('status',['pending','approved','completed']).gte('starts_at',new Date(today.getTime()-86400000).toISOString());if(bookErr)throw bookErr;
+  const dayNum=v=>{const map={'ПН':1,'ВТ':2,'СР':3,'ЧТ':4,'ПТ':5,'СБ':6,'ВС':0};const n=Number(v);return Number.isInteger(n)&&n>=0&&n<=6?n:(map[String(v||'').toUpperCase()]??null)};
+  const tickInRecurringSchedule=d=>{const mode=cfg.days||'Ежедневно',wd=d.getDay(),custom=(Array.isArray(cfg.workDays)?cfg.workDays:[]).map(dayNum).filter(x=>x!==null);const allowed=mode==='Ежедневно'||(mode==='Будни'&&wd>=1&&wd<=5)||(mode==='Выходные'&&(wd===0||wd===6))||(mode==='Пн–Сб'&&wd>=1&&wd<=6)||((mode==='По выбранным дням'||mode==='Выбрать дни')&&custom.includes(wd));if(!allowed)return false;const [sh,sm]=String(cfg.start||'10:00').split(':').map(Number),[eh,em]=String(cfg.end||'19:00').split(':').map(Number),minute=d.getHours()*60+d.getMinutes(),from=(sh||0)*60+(sm||0),to=(eh||0)*60+(em||0);return minute>=from&&minute<to&&((minute-from)%step===0)};
+  (activeBookings||[]).forEach(b=>{const st=new Date(b.starts_at);let en=b.ends_at?new Date(b.ends_at):new Date(st.getTime()+Math.max(1,Number(b.duration_minutes)||60)*60000);if(Number.isNaN(st.getTime())||Number.isNaN(en.getTime()))return;for(let tick=new Date(st);tick<en;tick=new Date(tick.getTime()+step*60000)){if(!tickInRecurringSchedule(tick))continue;const iso=tick.toISOString();rowMap.set(iso,{master_id:uid,starts_at:iso,ends_at:new Date(tick.getTime()+step*60000).toISOString(),schedule_enabled:true,is_available:false})}});
+
+  // Disable the previous future grid first. The upsert below re-enables only the
+  // ticks that belong to the newly saved schedule.
   const {error:d}=await pnSupabase.from('availability_slots').update({schedule_enabled:false,is_available:false}).eq('master_id',uid).gte('starts_at',today.toISOString());if(d)throw d;
-  const rows=[];Object.entries(slotMap||{}).forEach(([date,times])=>(times||[]).forEach(t=>{const [h,m]=String(t).split(':').map(Number);const st=new Date(date+'T00:00:00');st.setHours(h||0,m||0,0,0);rows.push({master_id:uid,starts_at:st.toISOString(),ends_at:new Date(st.getTime()+step*60000).toISOString(),schedule_enabled:true,is_available:true})}));
-  if(!rows.length)return[];const {data,error}=await pnSupabase.from('availability_slots').upsert(rows,{onConflict:'master_id,starts_at'}).select();if(error)throw error;return data||[];
+  const rows=[...rowMap.values()];if(!rows.length)return[];
+  const {data,error}=await pnSupabase.from('availability_slots').upsert(rows,{onConflict:'master_id,starts_at'}).select();if(error)throw error;return data||[];
  },
  async uploadMasterMedia(file,kind='work'){
   return pnUploadImage('master-media',file,kind);
@@ -363,7 +372,7 @@ window.PNBackendSync={
    if(p.schedule_config)localStorage.setItem('pn_master_schedule_config',JSON.stringify({days:p.schedule_config.days||'Ежедневно',workDays:Array.isArray(p.schedule_config.workDays)?p.schedule_config.workDays:[],start:p.schedule_config.start||'10:00',end:p.schedule_config.end||'19:00',step:Number(p.schedule_config.step)||60}))}
   localStorage.setItem('pn_master_services_0',JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   {let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
-  {const o={};(b.slots||[]).filter(x=>x.is_available===true).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(o[k]||(o[k]=[])).push(t)});localStorage.setItem('pn_master_slots',JSON.stringify(o))}
+  {const o={};(b.slots||[]).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;if(!Object.prototype.hasOwnProperty.call(o,k))o[k]=[];if(x.is_available===true)o[k].push(t)});Object.keys(o).forEach(k=>o[k]=[...new Set(o[k])].sort());localStorage.setItem('pn_master_slots',JSON.stringify(o))}
   if(b.bookings)localStorage.setItem('pn_bookings',JSON.stringify(b.bookings.map(x=>({id:x.id,master:Number(x.legacy_master_id)||0,masterId:Number(x.legacy_master_id)||0,masterUuid:x.master_id,clientId:x.client_id,clientName:x.client_name||'Клиент',masterName:x.master_name||'',service:x.service_name||'Услуга',serviceId:x.service_id||null,date:x.starts_at,endsAt:x.ends_at||null,durationMinutes:Number(x.duration_minutes)||null,time:new Date(x.starts_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),price:Number(x.price)||0,status:x.status==='approved'?'confirmed':x.status==='declined'?'cancelled':x.status,createdAt:x.created_at,syncedToSupabase:true}))));
   localStorage.setItem('pn_master_backend_reviews',JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,name:x.client_name||'Клиент',rating:Number(x.rating)||0,service:x.service_name||'Услуга',text:x.text||'',date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,photos:x.photos||[]}))));
   return b;

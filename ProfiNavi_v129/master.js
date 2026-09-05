@@ -359,7 +359,15 @@ function shiftMasterScheduleWeek(n){const today=new Date();today.setHours(0,0,0,
 function makeTimeSlots(start,end,step){const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number),out=[];let a=sh*60+sm,b=eh*60+em;while(a<b){out.push(`${String(Math.floor(a/60)).padStart(2,'0')}:${String(a%60).padStart(2,'0')}`);a+=Number(step)}return out}
 function pnWorkDayNumber(v){const m={'ПН':1,'ВТ':2,'СР':3,'ЧТ':4,'ПТ':5,'СБ':6,'ВС':0};const n=Number(v);return Number.isInteger(n)&&n>=0&&n<=6?n:(m[String(v||'').toUpperCase()]??null)}
 function pnWorkDayCode(v){return ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'][pnWorkDayNumber(v)]||''}
-function dayAllowed(d,mode){const wd=d.getDay(),custom=Array.isArray(masterScheduleConfig.workDays)?masterScheduleConfig.workDays.map(pnWorkDayNumber).filter(x=>x!==null):[];return mode==='Ежедневно'||(mode==='Будни'&&wd>=1&&wd<=5)||(mode==='Выходные'&&(wd===0||wd===6))||(mode==='Пн–Сб'&&wd>=1&&wd<=6)||((mode==='По выбранным дням'||mode==='Выбрать дни')&&custom.includes(wd))}
+function pnScheduleDayAllowed(d,cfg=masterScheduleConfig){const mode=cfg?.days||'Ежедневно',wd=d.getDay(),custom=Array.isArray(cfg?.workDays)?cfg.workDays.map(pnWorkDayNumber).filter(x=>x!==null):[];return mode==='Ежедневно'||(mode==='Будни'&&wd>=1&&wd<=5)||(mode==='Выходные'&&(wd===0||wd===6))||(mode==='Пн–Сб'&&wd>=1&&wd<=6)||((mode==='По выбранным дням'||mode==='Выбрать дни')&&custom.includes(wd))}
+function dayAllowed(d,mode){return pnScheduleDayAllowed(d,{...masterScheduleConfig,days:mode})}
+function pnBuildScheduleHorizon(cfg,existing={},daysAhead=62,preserveExisting=true){
+ const out={},today=new Date();today.setHours(0,0,0,0);const times=makeTimeSlots(cfg.start||'10:00',cfg.end||'19:00',Number(cfg.step)||60);
+ for(let i=0;i<Math.max(1,Number(daysAhead)||62);i++){const d=new Date(today);d.setDate(today.getDate()+i);const k=dateKeyLocal(d);if(preserveExisting&&Object.prototype.hasOwnProperty.call(existing||{},k)){out[k]=Array.isArray(existing[k])?[...existing[k]]:[];continue}out[k]=pnScheduleDayAllowed(d,cfg)?[...times]:[]}
+ return out;
+}
+function pnScheduleConfigFromProfile(p){return{days:p?.scheduleType||'Ежедневно',workDays:Array.isArray(p?.workDays)?p.workDays:[],start:p?.openTime||'10:00',end:p?.closeTime||'19:00',step:Number(p?.scheduleStep)||Number(masterScheduleConfig?.step)||60}}
+function pnSameSchedule(a,b){const norm=x=>JSON.stringify({days:x?.days||'Ежедневно',workDays:(Array.isArray(x?.workDays)?x.workDays.map(pnWorkDayCode).filter(Boolean):[]).sort(),start:x?.start||'10:00',end:x?.end||'19:00',step:Number(x?.step)||60});return norm(a)===norm(b)}
 
 function liveScheduleChange(){
  const days=document.getElementById('masterDays')?.value||'Ежедневно';
@@ -376,14 +384,28 @@ function liveScheduleChange(){
  if(wrap)wrap.innerHTML=renderScheduleTableInner();
 }
 
-function saveScheduleConfig(){
- // Dropdown changes are already applied live. Persist the same config in master_profiles
- // so another device and the public profile show the actual schedule settings.
- jset('pn_master_schedule_config',masterScheduleConfig);
- const p=profile();
- saveProfile({...p,scheduleType:masterScheduleConfig.days,workDays:masterScheduleConfig.workDays||[],openTime:masterScheduleConfig.start,closeTime:masterScheduleConfig.end,scheduleStep:Number(masterScheduleConfig.step)||60});
- queueLatestSlots().catch(e=>console.warn('schedule save',e));
- showScheduleSavedPopup();
+async function saveScheduleConfig(){
+ const btn=document.querySelector('.schedule-save-bottom');const oldText=btn?.textContent||'Сохранить график';
+ try{
+  if(!window.PNData)throw new Error('База данных не загрузилась');
+  if(btn){btn.disabled=true;btn.textContent='Сохраняем…'}
+  jset('pn_master_schedule_config',masterScheduleConfig);
+  const p=profile();
+  // Fill the future horizon, but keep dates the master has already edited by hand.
+  const expanded=pnBuildScheduleHorizon(masterScheduleConfig,getSlots(),62,true);
+  jset(SLOT_KEY,expanded);
+  await saveProfile({...p,scheduleType:masterScheduleConfig.days,workDays:masterScheduleConfig.workDays||[],openTime:masterScheduleConfig.start,closeTime:masterScheduleConfig.end,scheduleStep:Number(masterScheduleConfig.step)||60});
+  await queueLatestSlots();
+  await flushMasterSaves();
+  const check=await PNData.loadMasterBundle();
+  const serverCfg=check?.profile?.schedule_config||{};
+  if(!pnSameSchedule(masterScheduleConfig,{days:serverCfg.days,workDays:serverCfg.workDays,start:serverCfg.start,end:serverCfg.end,step:serverCfg.step}))throw new Error('Supabase не подтвердил сохранение графика');
+  const expected=Object.values(expanded).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0);
+  const enabled=(check?.slots||[]).filter(x=>x.schedule_enabled!==false).length;
+  if(expected>0&&enabled===0)throw new Error('Свободные окна не записались в базу');
+  showScheduleSavedPopup();masterToast('График сохранён в базе');
+ }catch(e){console.warn('schedule save',e);masterToast('Не удалось сохранить график: '+(e?.message||e),true);alert('Не удалось сохранить график в базе.\n'+(e?.message||e))}
+ finally{if(btn){btn.disabled=false;btn.textContent=oldText}}
 }
 
 function renderScheduleTableInner(){
@@ -917,35 +939,36 @@ function openAddressEditor(){
  }
  ov.querySelector('.edit-close').onclick=()=>ov.remove();
  ov.querySelector('.edit-save').onclick=async()=>{
-   const openTime=ov.querySelector('#eaOpen').value;
-   const closeTime=ov.querySelector('#eaClose').value;
-   const newAddress=ov.querySelector('#eaAddress').value.trim();
-   const newArea=ov.querySelector('#eaArea').value;
-   let geo=pnEditPickedLocation?{found:true,lat:pnEditPickedLocation.lat,lng:pnEditPickedLocation.lng}:{found:false};
-   if(!geo.found){try{if(newAddress)geo=await pnGeocodeAddress(newAddress,p.city||'Бишкек')}catch(e){console.warn('geocode',e)}}
-   saveProfile({...p,scheduleType:ov.querySelector('#eaScheduleType')?.value||'Ежедневно',workDays:(()=>{const t=ov.querySelector('#eaScheduleType')?.value||'Ежедневно';if(t==='Ежедневно')return ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];if(t==='Будни')return ['ПН','ВТ','СР','ЧТ','ПТ'];if(t==='Выходные')return ['СБ','ВС'];return [...ov.querySelectorAll('#customDays button.active')].map(b=>b.dataset.day)})(),
-     area:newArea,
-     address:newAddress,
-     lat:geo?.found?geo.lat:p.lat,
-     lng:geo?.found?geo.lng:p.lng,
-     openTime,
-     closeTime,
-     hours:`${openTime}–${closeTime}`,
-     payment:ov.querySelector('#eaPayment').value,
-     locationInfo:ov.querySelector('#eaInfo').value.trim()
-   });
+   const saveBtn=ov.querySelector('.edit-save'),oldLabel=saveBtn?.textContent||'Готово';
    try{
-     const sess=session();
-     if(sess?.userId && window.pnSupabase){
-       await pnSupabase.from('master_profiles').update({
-         area:newArea,address:newAddress,
-         latitude:geo?.found?geo.lat:null,
-         longitude:geo?.found?geo.lng:null,
-         updated_at:new Date().toISOString()
-       }).eq('user_id',sess.userId);
-     }
-   }catch(e){console.warn('profile address sync',e)}
-   ov.remove();renderProfile()
+    if(!window.PNData)throw new Error('База данных не загрузилась');
+    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Сохраняем…'}
+    const openTime=ov.querySelector('#eaOpen').value;
+    const closeTime=ov.querySelector('#eaClose').value;
+    if(openTime>=closeTime)throw new Error('Время окончания должно быть позже времени начала');
+    const newAddress=ov.querySelector('#eaAddress').value.trim();
+    const newArea=ov.querySelector('#eaArea').value;
+    const scheduleTypeValue=ov.querySelector('#eaScheduleType')?.value||'Ежедневно';
+    const workDays=(()=>{if(scheduleTypeValue==='Ежедневно')return ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];if(scheduleTypeValue==='Будни')return ['ПН','ВТ','СР','ЧТ','ПТ'];if(scheduleTypeValue==='Выходные')return ['СБ','ВС'];return [...ov.querySelectorAll('#customDays button.active')].map(b=>b.dataset.day)})();
+    if(scheduleTypeValue==='Выбрать дни'&&!workDays.length)throw new Error('Выберите хотя бы один рабочий день');
+    let geo=pnEditPickedLocation?{found:true,lat:pnEditPickedLocation.lat,lng:pnEditPickedLocation.lng}:{found:false};
+    if(!geo.found){try{if(newAddress)geo=await pnGeocodeAddress(newAddress,p.city||'Бишкек')}catch(e){console.warn('geocode',e)}}
+    const oldCfg=pnScheduleConfigFromProfile(p);
+    const next={...p,scheduleType:scheduleTypeValue,workDays,area:newArea,address:newAddress,lat:geo?.found?geo.lat:p.lat,lng:geo?.found?geo.lng:p.lng,openTime,closeTime,hours:`${openTime}–${closeTime}`,payment:ov.querySelector('#eaPayment').value,locationInfo:ov.querySelector('#eaInfo').value.trim(),scheduleStep:Number(p.scheduleStep)||Number(masterScheduleConfig?.step)||60};
+    const newCfg=pnScheduleConfigFromProfile(next);
+    await saveProfile(next);
+    if(!pnSameSchedule(oldCfg,newCfg)){
+      masterScheduleConfig=newCfg;jset('pn_master_schedule_config',newCfg);
+      // Editing the general work schedule is an intentional reset of the future recurring grid.
+      const rebuilt=pnBuildScheduleHorizon(newCfg,{},62,false);jset(SLOT_KEY,rebuilt);
+      await queueLatestSlots();await flushMasterSaves();
+    }
+    const check=await PNData.loadMasterBundle();
+    const serverCfg=check?.profile?.schedule_config||{};
+    if(!pnSameSchedule(newCfg,{days:serverCfg.days,workDays:serverCfg.workDays,start:serverCfg.start,end:serverCfg.end,step:serverCfg.step}))throw new Error('Supabase не подтвердил новый график');
+    pnEditPickedLocation=null;ov.remove();renderProfile();masterToast('Профиль и график сохранены в базе');
+   }catch(e){console.warn('profile schedule save',e);masterToast('Не удалось сохранить: '+(e?.message||e),true);alert('Не удалось сохранить изменения в базе.\n'+(e?.message||e))}
+   finally{if(saveBtn&&document.body.contains(saveBtn)){saveBtn.disabled=false;saveBtn.textContent=oldLabel}}
  };
 }
 function canLeaveVerifiedReview(booking){

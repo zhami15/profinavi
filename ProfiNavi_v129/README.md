@@ -1,4 +1,4 @@
-# ProfiNavi v140 — function integrity audit
+# ProfiNavi v141 — schedule database sync fix
 
 v138 — стабильная версия после полного регрессионного прохода и перехода на чистое состояние базы.
 

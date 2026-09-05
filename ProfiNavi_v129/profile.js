@@ -319,7 +319,7 @@ async function pnHydratePublicProfile(){
  try{
   const id=Number(new URLSearchParams(location.search).get('id')||0);
   const b=await window.PNBackendSync?.hydratePublicMasterCache?.(id);
-  if(b&&window.PNRanking?.fromBundle){const dynamic=window.PNRanking.fromBundle(b.profile,b.services,b.works,[]);if(dynamic){masters[id]=dynamic;try{localStorage.setItem(`pn_dynamic_master_${id}`,JSON.stringify(dynamic))}catch(e){}}}
+  if(b&&window.PNRanking?.fromBundle){const dynamic=window.PNRanking.fromBundle(b.profile,b.services,b.works,b.slots||[]);if(dynamic){masters[id]=dynamic;try{localStorage.setItem(`pn_dynamic_master_${id}`,JSON.stringify(dynamic))}catch(e){}}}
   if(id===0&&b){const cp=getClientEditableProfile(0);if(cp.name)masters[0].name=cp.name;if(cp.avatar)masters[0].avatar=cp.avatar;if(cp.area||cp.address)masters[0].district=[cp.area,cp.address].filter(Boolean).join(' · ');if(Number.isFinite(Number(cp.lat)))masters[0].lat=Number(cp.lat);if(Number.isFinite(Number(cp.lng)))masters[0].lng=Number(cp.lng);if(cp.rating)masters[0].rating=cp.rating;if(Array.isArray(cp.works)&&cp.works.length)masters[0].gallery=cp.works;}
   renderProfile();
  }catch(e){console.warn('public profile sync',e);renderProfile()}

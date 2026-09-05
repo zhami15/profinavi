@@ -115,16 +115,20 @@ window.PNData={
   const user=await PNAuth.currentUser();if(!user)throw new Error('Сначала подтвердите номер телефона');
   const startsAt=new Date(input.startsAt),legacyId=Number(input.master)||0;
   if(Number.isNaN(startsAt.getTime()))throw new Error('Некорректная дата записи');
-  let masterId=null,serviceId=null;
-  try{
-   const {data:mp}=await pnSupabase.from('master_profiles').select('user_id').eq('legacy_id',legacyId).maybeSingle();
-   masterId=mp?.user_id||null;
-   if(masterId&&input.service){
-    const {data:sv}=await pnSupabase.from('services').select('id').eq('master_id',masterId).eq('name',input.service).eq('is_active',true).limit(1).maybeSingle();
-    serviceId=sv?.id||null;
-   }
-  }catch(e){console.warn('master resolve',e)}
-  const payload={client_id:user.id,master_id:masterId,service_id:serviceId,legacy_master_id:legacyId,master_name:input.masterName||null,service_name:input.service||'Услуга',starts_at:startsAt.toISOString(),ends_at:null,price:Number(input.price)||0,status:'pending',client_name:pnCachedClient()?.name||null};
+  let masterId=null,serviceId=null,bookingPrice=Number(input.price)||0;
+  const {data:mp,error:mpError}=await pnSupabase.from('master_profiles').select('user_id,is_published').eq('legacy_id',legacyId).eq('is_published',true).maybeSingle();
+  if(mpError)throw mpError;
+  masterId=mp?.user_id||null;
+  if(!masterId)throw new Error('Мастер не найден или профиль больше не опубликован.');
+  if(input.service){
+   const {data:sv,error:svError}=await pnSupabase.from('services').select('id,price,new_price').eq('master_id',masterId).eq('name',input.service).eq('is_active',true).limit(1).maybeSingle();
+   if(svError)throw svError;
+   serviceId=sv?.id||null;
+   if(!serviceId)throw new Error('Эта услуга больше недоступна. Обновите профиль мастера.');
+   const base=Number(sv.price)||0,discount=sv.new_price==null?null:Number(sv.new_price);
+   bookingPrice=Number.isFinite(discount)&&discount>=0&&discount<base?discount:base;
+  }
+  const payload={client_id:user.id,master_id:masterId,service_id:serviceId,legacy_master_id:legacyId,master_name:input.masterName||null,service_name:input.service||'Услуга',starts_at:startsAt.toISOString(),ends_at:null,price:bookingPrice,status:'pending',client_name:pnCachedClient()?.name||null};
   const {data,error}=await pnSupabase.from('bookings').insert(payload).select('id,created_at,master_id').single();if(error)throw error;return data;
  },
  async updateBookingStatus(id,status){
@@ -177,13 +181,16 @@ window.PNData={
  },
  async loadPublicMasterBundle(legacyId){
   const id=Number(legacyId)||0;
-  const {data:profile,error}=await pnSupabase.from('master_profiles').select('*').eq('legacy_id',id).maybeSingle();if(error)throw error;if(!profile)return null;
-  const [services,works,reviews]=await Promise.all([
+  const {data:profile,error}=await pnSupabase.from('master_profiles').select('*').eq('legacy_id',id).eq('is_published',true).maybeSingle();if(error)throw error;if(!profile)return null;
+  const nowIso=new Date().toISOString();
+  const horizonIso=new Date(Date.now()+62*86400000).toISOString();
+  const [services,works,reviews,slots]=await Promise.all([
    pnSupabase.from('services').select('*').eq('master_id',profile.user_id).eq('is_active',true).order('sort_order'),
    pnSupabase.from('works').select('*').eq('master_id',profile.user_id).order('sort_order'),
-   pnSupabase.from('reviews').select('*').eq('master_id',profile.user_id).order('created_at',{ascending:false})
-  ]);for(const r of [services,works,reviews])if(r.error)throw r.error;
-  return {profile,services:services.data||[],works:works.data||[],reviews:reviews.data||[]};
+   pnSupabase.from('reviews').select('*').eq('master_id',profile.user_id).order('created_at',{ascending:false}),
+   pnSupabase.from('availability_slots').select('id,master_id,starts_at,ends_at,is_available').eq('master_id',profile.user_id).eq('is_available',true).gte('starts_at',nowIso).lte('starts_at',horizonIso).order('starts_at')
+  ]);for(const r of [services,works,reviews,slots])if(r.error)throw r.error;
+  return {profile,services:services.data||[],works:works.data||[],reviews:reviews.data||[],slots:slots.data||[]};
  }
 };
 
@@ -274,6 +281,7 @@ window.PNBackendSync={
   localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
   if(legacyId===0)localStorage.setItem('pn_master_services_0',localStorage.getItem(`pn_master_services_${legacyId}`)||'[]');
   localStorage.setItem(`pn_public_reviews_${legacyId}`,JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,rating:Number(x.rating)||0,text:x.text||'',photos:x.photos||[],date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true}))));
+  {const slotMap={};(b.slots||[]).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(slotMap[k]||(slotMap[k]=[])).push(t)});localStorage.setItem(`pn_public_slots_${legacyId}`,JSON.stringify(slotMap));}
   return b;
  },
  async hydrateMasterCache(){

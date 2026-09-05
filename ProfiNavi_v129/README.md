@@ -1,3 +1,34 @@
+# ProfiNavi v134 — Admin
+
+## Admin panel
+
+- `/admin-login.html` — admin phone OTP login.
+- `/admin.html` — all master profiles, including drafts and blocked profiles.
+- `/admin-master.html?id=<legacy_id>` — edit profile, services, works, schedule and status.
+- Admin authorization is based on protected Supabase `app_metadata.profinavi_role=admin`, never on client-side role flags.
+- Server allowlist contains the approved admin phone and is closed to anon/authenticated clients.
+- Admin media changes use the existing `master-media` / `service-media` Storage buckets with dedicated RLS.
+- `admin_audit_log` records admin profile/service/work/schedule edits.
+- Blocked master profiles remain in the database but are hidden from public clients.
+
+## Current test admin
+
+Phone: `+996 550 119 604`
+Display name: `Admin`
+Test OTP while `PN_TEST_MODE=true`: `111111`
+
+
+## Availability / booking calendar fix
+
+- Client booking calendar now reloads the selected master's live `availability_slots` directly from Supabase.
+- Public profile hydration preserves slots instead of overwriting them with an empty slot map.
+- Booking time rows are derived from the master's real available times, not a fixed 09:00–20:30 grid.
+- Public master bundle includes up to 62 days of future availability.
+- Booking creation atomically claims a free slot in Supabase. A second booking for the same master/time is rejected.
+- Pending/approved/completed bookings keep their slot unavailable; declined/cancelled bookings release it.
+- Re-saving a master's schedule cannot accidentally reopen a slot with an active booking.
+- New bookings must resolve to a real published master and active service.
+
 # ProfiNavi v131
 
 Статический PWA-клиент ProfiNavi для Netlify/Vercel + Supabase backend.

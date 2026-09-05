@@ -1,6 +1,0 @@
-v112 client registration fix
-- Fixed Supabase profiles RLS issue that blocked client registration.
-- Client registration now updates the profile created by the test phone auth function, with insert fallback.
-- After authentication initiated from booking confirmation, user returns to booking-confirm.html instead of losing the booking flow.
-- Existing login also returns to the requested page.
-- Supabase migration profiles_self_insert was applied.

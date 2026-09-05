@@ -1,7 +1,0 @@
-ProfiNavi v102 — Supabase Auth phase 1
-- Real Supabase Email OTP registration/login.
-- Phone OTP path is connected but requires SMS provider configuration in Supabase.
-- Google/Apple paths are connected but require enabling OAuth providers and redirect URLs in Supabase.
-- Client name is saved to public.profiles.
-- Existing booking/services/chat remain on localStorage for this phase, so v101 behavior is preserved.
-Next: migrate master profiles, services, works/storage, availability, bookings and realtime chat.

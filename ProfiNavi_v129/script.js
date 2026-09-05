@@ -434,6 +434,18 @@ function masterMatchesQuickDate(m,i,dateKey){
  }
  return (masterAvailability[dateKey]||[]).includes(i);
 }
+function openProfile(i){
+ const id=Number(i);
+ if(!Number.isFinite(id))return;
+ window.location.href=`profile.html?id=${encodeURIComponent(id)}`;
+}
+function openServiceProfile(masterIndex,serviceIndex){
+ const mi=Number(masterIndex),si=Number(serviceIndex);
+ if(!Number.isFinite(mi)||!Number.isFinite(si))return;
+ const params=new URLSearchParams({id:String(mi),service:String(si)});
+ window.location.href=`profile.html?${params.toString()}#menu`;
+}
+
 function render(){
  applyMasterProSyncToClientHome();
  const q=(search?.value||'').toLowerCase().trim();const favs=getFavs();

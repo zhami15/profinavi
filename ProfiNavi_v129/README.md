@@ -1,4 +1,4 @@
-# ProfiNavi v138 stable clean R2
+# ProfiNavi v139 — master card click fix
 
 v138 — стабильная версия после полного регрессионного прохода и перехода на чистое состояние базы.
 

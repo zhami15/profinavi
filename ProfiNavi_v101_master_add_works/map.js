@@ -12,19 +12,10 @@
  }catch(e){}
 })();
 
-const masters=[
- {id:0,name:'Tunuk Nails',services:['nails'],district:'Vefa Center · Байтик Баатыра 98',area:'center',rating:4.9,priceValue:1400,price:'от 1400 сом',avatar:'assets/tunuk-new.png',lat:42.857255,lng:74.609848,available:['today','tomorrow']},
- {id:1,name:'Adel Beauty',services:['hair','makeup'],district:'Нижний Джал',area:'jal',rating:4.8,priceValue:1200,price:'от 1200 сом',avatar:'assets/adel-new.png',lat:42.842427,lng:74.566250,available:['tomorrow']},
- {id:2,name:'Alya Lashes',services:['lashes','brows'],district:'5 микрорайон, дом 2',area:'microdistricts',rating:4.7,priceValue:1000,price:'от 1000 сом',avatar:'assets/alya-new.png',lat:42.873765,lng:74.636127,available:['today']},
- {id:3,name:'Mira Brows',services:['brows','makeup'],district:'Asia Mall · Ч. Айтматова 3',area:'asia',rating:4.9,priceValue:700,price:'от 700 сом',avatar:'assets/mira-new.png',lat:42.855421,lng:74.586573,available:['today','tomorrow']},
- {id:4,name:'Nursaule Nails',services:['nails'],district:'Asia Mall',area:'asia',rating:4.8,priceValue:900,price:'от 900 сом',avatar:'assets/nursaule-new.png',lat:42.85575,lng:74.58710,available:['tomorrow']},
- {id:5,name:'Diana Beauty',services:['nails','makeup'],district:'Токтоналиева 52 · Политех',area:'polytech',rating:4.9,priceValue:1500,price:'от 1500 сом',avatar:'assets/diana-new.png',lat:42.84975,lng:74.57865,available:['today']},
- {id:6,name:'Valeria Hair',services:['hair'],district:'Аламедин Grand',area:'alamedin',rating:4.8,priceValue:1000,price:'от 1000 сом',avatar:'assets/valeria-new.png',lat:42.88535,lng:74.63740,available:['today','tomorrow']},
- {id:7,name:'Marina Beauty',services:['hair','makeup'],district:'Район Карла Маркса',area:'east',rating:4.9,priceValue:1000,price:'от 1000 сом',avatar:'assets/marina-new.png',lat:42.87480,lng:74.63080,available:['tomorrow']},
- {id:8,name:'Nina Nails',services:['nails'],district:'5 микрорайон, дом 2',area:'microdistricts',rating:4.9,priceValue:1000,price:'от 1000 сом',avatar:'assets/nina-new.png',lat:42.87370,lng:74.63605,available:['today']},
- {id:9,name:'Nellinails Studio',services:['nails'],district:'Куйбышева 93',area:'center',rating:4.8,priceValue:1000,price:'от 1000 сом',avatar:'assets/nellinails-new.png',lat:42.87725,lng:74.61475,available:['today','tomorrow']},
- {id:10,name:'Bogdan Beauty',services:['lashes','brows'],district:'Бишкек',area:'center',rating:4.7,priceValue:1700,price:'от 1700 сом',avatar:'assets/bogdan-new.png',lat:42.86650,lng:74.59830,available:['tomorrow']}
-];
+const mapAreas=['center','jal','microdistricts','asia','asia','polytech','alamedin','east','microdistricts','center','center'];
+const mapAvailability=[['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow']];
+const masters=window.PNCloneMasters().map((m,id)=>({...m,id,services:[m.cat],area:mapAreas[id]||'center',priceValue:Number.parseInt(String(m.price).replace(/\D/g,''),10)||0,price:m.price,available:mapAvailability[id]||['tomorrow'],rating:Number(m.rating)||0}));
+window.masters=masters;
 
 
 try{
@@ -55,7 +46,8 @@ const serviceLabels={hair:'Волосы',nails:'Ногти',lashes:'Ресниц
 const areaLabels={center:'Центр',jal:'Джал',microdistricts:'Микрорайоны',asia:'Asia Mall',polytech:'Политех',alamedin:'Аламедин',east:'Карла Маркса'};
 function km(a,b,c,d){const r=x=>x*Math.PI/180,R=6371,dl=r(c-a),dn=r(d-b);const q=Math.sin(dl/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dn/2)**2;return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q))}
 function label(d){return d<1?`${Math.max(1,Math.round(d*1000))} м`:`${d.toFixed(d<10?1:0)} км`}
-function categoryLabel(m){return m.services.map(x=>serviceLabels[x]).join(' · ')}
+function masterCategoryKeys(m){const a=Array.isArray(m.categories)&&m.categories.length?m.categories:[m.cat];return a.filter(x=>typeof x==='string')}
+function categoryLabel(m){return masterCategoryKeys(m).map(x=>serviceLabels[x]||x).join(' · ')}
 function anyFilters(){return filters.priceMin>0||filters.priceMax!==null||filters.date!=='all'||filters.areas.size||filters.services.size}
 function visible(){
  let list=masters.filter(m=>{
@@ -64,7 +56,7 @@ function visible(){
    if(filters.date==='today'&&!m.available.includes('today'))return false;
    if(filters.date==='tomorrow'&&!m.available.includes('tomorrow'))return false;
    if(filters.areas.size&&!filters.areas.has(m.area))return false;
-   if(filters.services.size&&!m.services.some(s=>filters.services.has(s)))return false;
+   if(filters.services.size&&!masterCategoryKeys(m).some(s=>filters.services.has(s)))return false;
    return true;
  });
  if(userLocation)list.sort((x,y)=>km(userLocation.lat,userLocation.lng,x.lat,x.lng)-km(userLocation.lat,userLocation.lng,y.lat,y.lng));
@@ -80,7 +72,7 @@ function renderSheet(){
      return `<button class="map-strip-card" type="button" data-master-id="${m.id}" aria-label="Открыть профиль ${m.name}">
        <img src="${m.avatar}" alt="">
        <span class="map-strip-copy">
-         <span class="map-strip-name"><b>${m.name}</b><em>★ ${m.rating.toFixed(1)}</em></span>
+         <span class="map-strip-name"><b>${m.name}</b><em>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</em></span>
          <span class="map-strip-service"><span>${service}</span><strong>${m.price}</strong></span>
        </span>
      </button>`;
@@ -101,11 +93,11 @@ function showMasterCard(m){
  const distance=userLocation?` · ${label(km(userLocation.lat,userLocation.lng,m.lat,m.lng))}`:'';
  const available=m.available.includes('today')?'Свободно сегодня':'Свободно завтра';
  selectedCard.dataset.masterId=m.id;
- selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${m.avatar}" alt="${m.name}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${m.name} · ★ ${m.rating.toFixed(1)}</b><small>${categoryLabel(m)} · ${m.district}${distance}</small><strong>${m.price} · ${available}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
+ selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${m.avatar}" alt="${m.name}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${m.name} · ${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</b><small>${categoryLabel(m)} · ${m.district}${distance}</small><strong>${m.price} · ${available}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
  selectedCard.classList.remove('hidden');
  selectedCard.querySelector('.map-selected-master-close').onclick=()=>selectedCard.classList.add('hidden');
  selectedCard.querySelector('.map-selected-master-copy').onclick=()=>location.href=`profile.html?id=${m.id}`;
- selectedCard.querySelector('.map-selected-master-action').onclick=()=>location.href=`booking.html?id=${m.id}`;
+ selectedCard.querySelector('.map-selected-master-action').onclick=()=>location.href=`booking.html?master=${m.id}`;
 }
 function clearMarkers(){markers.forEach(x=>map.removeLayer(x));markers=[]}
 function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${m.avatar}" alt=""><span>${m.name}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
@@ -188,3 +180,16 @@ window.addEventListener('pageshow',()=>{
   }
  }catch(e){}
 });
+
+window.addEventListener('DOMContentLoaded',()=>setTimeout(async()=>{try{const b=await window.PNBackendSync?.hydratePublicMasterCache?.(0);if(!b)return;const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}');const m=masters[0];if(cp.name)m.name=cp.name;if(cp.avatar)m.avatar=cp.avatar;if(cp.area||cp.address)m.district=[cp.area,cp.address].filter(Boolean).join(' · ');if(Number.isFinite(Number(cp.lat)))m.lat=Number(cp.lat);if(Number.isFinite(Number(cp.lng)))m.lng=Number(cp.lng);if(cp.rating)m.rating=Number(cp.rating)||m.rating;renderMarkers();}catch(e){console.warn('public map sync',e)}},120));
+
+
+async function pnHydrateMapDirectory(){
+ try{
+  if(!window.PNRanking?.hydrate)return;
+  await window.PNRanking.hydrate(masters);
+  renderMarkers();
+ }catch(e){console.warn('map ranked directory sync',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydrateMapDirectory,70));
+window.addEventListener('pageshow',()=>setTimeout(pnHydrateMapDirectory,70));

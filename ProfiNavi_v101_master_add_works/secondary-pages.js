@@ -1,30 +1,20 @@
-const masters=[
-{name:'Tunuk Nails',cat:'nails',district:'Vefa Center · Байтик Баатыра 98',rating:'4.9',experience:'Опыт 5 лет',avatar:'assets/tunuk-new.png'},
-{name:'Adel Beauty',cat:'nails',district:'Нижний Джал',rating:'4.8',experience:'Опыт 4 года',avatar:'assets/adel-new.png'},
-{name:'Alya Lashes',cat:'lashes',district:'5 микрорайон, дом 2',rating:'4.7',experience:'Опыт 6 лет',avatar:'assets/alya-new.png'},
-{name:'Mira Brows',cat:'brows',district:'Asia Mall',rating:'4.9',experience:'Опыт 3 года',avatar:'assets/mira-new.png'},
-{name:'Nursaule Nails',cat:'nails',district:'Asia Mall',rating:'4.8',experience:'Опыт 4 года',avatar:'assets/nursaule-new.png'},
-{name:'Diana Nail Art',cat:'nails',district:'Токтоналиева 52',rating:'4.9',experience:'Опыт 5 лет',avatar:'assets/diana-new.png'},
-{name:'Valeria Nails',cat:'nails',district:'Аламедин Grand',rating:'4.8',experience:'Опыт 5 лет',avatar:'assets/valeria-new.png'},
-{name:'Marina Nails',cat:'nails',district:'Район Карла Маркса',rating:'4.9',experience:'Опыт 8 лет',avatar:'assets/marina-new.png'},
-{name:'Nina Nails',cat:'nails',district:'5 микрорайон, дом 2',rating:'4.9',experience:'Опыт 11 лет',avatar:'assets/nina-new.png'},
-{name:'Nellinails Studio',cat:'nails',district:'Куйбышева 93',rating:'4.8',experience:'Студия маникюра',avatar:'assets/nellinails-new.png'},
-{name:'Bogdan Nails',cat:'nails',district:'Бишкек',rating:'4.7',experience:'Индивидуальная запись',avatar:'assets/bogdan-new.png'}];
+const masters=window.PNCloneMasters();
+window.masters=masters;
 const snapIdeas=[
-{master:0,cat:'nails',title:'Milky french',service:'Маникюр с покрытием',price:'от 1000 сом',photo:'assets/work-01.jpg'},
-{master:1,cat:'nails',title:'Pink clean nails',service:'Маникюр и дизайн',price:'от 1200 сом',photo:'assets/work-02.jpg'},
-{master:2,cat:'lashes',title:'Wet effect lashes',service:'Наращивание ресниц',price:'от 1500 сом',photo:'assets/work-03.jpg'},
-{master:3,cat:'brows',title:'Soft brows',service:'Ламинирование бровей',price:'от 1200 сом',photo:'assets/work-04.jpg'},
-{master:5,cat:'nails',title:'Nail art',service:'Маникюр с дизайном',price:'от 1300 сом',photo:'assets/work-05.jpg'},
-{master:6,cat:'nails',title:'French nails',service:'Френч',price:'от 1400 сом',photo:'assets/work-06.jpg'},
-{master:4,cat:'nails',title:'Long oval',service:'Маникюр на длинные ногти',price:'от 1500 сом',photo:'assets/work-07.jpg'},
-{master:8,cat:'nails',title:'Clean manicure',service:'Чистый маникюр',price:'от 1000 сом',photo:'assets/work-08.jpg'},
-{master:9,cat:'nails',title:'Soft nude',service:'Маникюр однотонный',price:'от 1000 сом',photo:'assets/work-09.jpg'},
-{master:10,cat:'nails',title:'Glossy nails',service:'Маникюр с покрытием',price:'от 1100 сом',photo:'assets/work-10.jpg'},
-{master:2,cat:'lashes',title:'Natural volume',service:'Ресницы 2D',price:'от 1600 сом',photo:'assets/work-11.jpg'},
-{master:3,cat:'brows',title:'Brow styling',service:'Коррекция и окрашивание',price:'от 900 сом',photo:'assets/work-12.jpg'}];
+{master:0,cat:'nails',title:'Milky french',service:'Маникюр с покрытием',price:'1000 сом',photo:'assets/work-01.jpg'},
+{master:1,cat:'nails',title:'Pink clean nails',service:'Маникюр и дизайн',price:'1200 сом',photo:'assets/work-02.jpg'},
+{master:2,cat:'lashes',title:'Wet effect lashes',service:'Наращивание ресниц',price:'1500 сом',photo:'assets/work-03.jpg'},
+{master:3,cat:'brows',title:'Soft brows',service:'Ламинирование бровей',price:'1200 сом',photo:'assets/work-04.jpg'},
+{master:5,cat:'nails',title:'Nail art',service:'Маникюр с дизайном',price:'1300 сом',photo:'assets/work-05.jpg'},
+{master:6,cat:'nails',title:'French nails',service:'Френч',price:'1400 сом',photo:'assets/work-06.jpg'},
+{master:4,cat:'nails',title:'Long oval',service:'Маникюр на длинные ногти',price:'1500 сом',photo:'assets/work-07.jpg'},
+{master:8,cat:'nails',title:'Clean manicure',service:'Чистый маникюр',price:'1000 сом',photo:'assets/work-08.jpg'},
+{master:9,cat:'nails',title:'Soft nude',service:'Маникюр однотонный',price:'1000 сом',photo:'assets/work-09.jpg'},
+{master:10,cat:'nails',title:'Glossy nails',service:'Маникюр с покрытием',price:'1100 сом',photo:'assets/work-10.jpg'},
+{master:2,cat:'lashes',title:'Natural volume',service:'Ресницы 2D',price:'1600 сом',photo:'assets/work-11.jpg'},
+{master:3,cat:'brows',title:'Brow styling',service:'Коррекция и окрашивание',price:'900 сом',photo:'assets/work-12.jpg'}];
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
-const setFavs=v=>localStorage.setItem('pn_favs',JSON.stringify(v));
+const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
 const getFavWorks=()=>JSON.parse(localStorage.getItem('pn_fav_works')||'[]');
 const setFavWorks=v=>localStorage.setItem('pn_fav_works',JSON.stringify(v));
 function openProfile(i){location.href=`profile.html?id=${i}`}
@@ -151,10 +141,23 @@ function openWorksViewer(index){
  requestAnimationFrame(()=>{const slide=list.children[index];slide?.scrollIntoView({block:'start'});});
 }
 function closeWorksViewer(){const viewer=document.getElementById('worksViewer');viewer?.classList.remove('open');viewer?.setAttribute('aria-hidden','true');document.body.classList.remove('viewer-open')}
-function renderFavorites(tab='masters'){const box=document.getElementById('favoritePageContent');if(!box)return;document.querySelectorAll('[data-fav-tab]').forEach(b=>b.classList.toggle('active',b.dataset.favTab===tab));if(tab==='masters'){const ids=getFavs();box.innerHTML=ids.length?`<div class="favorite-page-list">${ids.map(i=>{const m=masters[i];return m?`<article class="favorite-page-master" onclick="openProfile(${i})"><img src="${m.avatar}"><div><h2>${m.name}</h2><p>★ ${m.rating} · ${m.experience}</p><small>⌖ ${m.district}</small></div><button onclick="event.stopPropagation();toggleMaster(${i})">♥</button></article>`:''}).join('')}</div>`:empty('Нет сохранённых мастеров','Нажмите сердечко на карточке мастера.')}else{const keys=getFavWorks();box.innerHTML=keys.length?`<div class="favorite-page-works">${keys.map(k=>{if(k.startsWith('snap:')){const x=snapIdeas[+k.split(':')[1]],m=x&&masters[x.master];if(!x||!m)return'';return `<article onclick="openProfile(${x.master})"><div class="fav-work-visual">${x.emoji}<button onclick="event.stopPropagation();toggleWork('${k}')">♥</button></div><b>${x.title}</b><small>${m.name}</small></article>`}const [mi,gi]=k.split(':').map(Number),m=masters[mi];if(!m)return'';return `<article onclick="openProfile(${mi})"><div class="fav-work-visual"><img src="${m.avatar}"><button onclick="event.stopPropagation();toggleWork('${k}')">♥</button></div><b>Работа мастера</b><small>${m.name}</small></article>`}).join('')}</div>`:empty('Нет сохранённых работ','Сохраняйте фото работ сердечком.')}}
+function renderFavorites(tab='masters'){const box=document.getElementById('favoritePageContent');if(!box)return;document.querySelectorAll('[data-fav-tab]').forEach(b=>b.classList.toggle('active',b.dataset.favTab===tab));if(tab==='masters'){const ids=getFavs();box.innerHTML=ids.length?`<div class="favorite-page-list">${ids.map(i=>{const m=masters[i];return m?`<article class="favorite-page-master" onclick="openProfile(${i})"><img src="${m.avatar}"><div><h2>${m.name}</h2><p>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+m.rating)}${m.experience?' · '+m.experience:''}</p><small>⌖ ${m.district}</small></div><button onclick="event.stopPropagation();toggleMaster(${i})">♥</button></article>`:''}).join('')}</div>`:empty('Нет сохранённых мастеров','Нажмите сердечко на карточке мастера.')}else{const keys=getFavWorks();box.innerHTML=keys.length?`<div class="favorite-page-works">${keys.map(k=>{if(k.startsWith('snap:')){const x=snapIdeas[+k.split(':')[1]],m=x&&masters[x.master];if(!x||!m)return'';return `<article onclick="openProfile(${x.master})"><div class="fav-work-visual">${x.emoji}<button onclick="event.stopPropagation();toggleWork('${k}')">♥</button></div><b>${x.title}</b><small>${m.name}</small></article>`}const [mi,gi]=k.split(':').map(Number),m=masters[mi];if(!m)return'';return `<article onclick="openProfile(${mi})"><div class="fav-work-visual"><img src="${m.avatar}"><button onclick="event.stopPropagation();toggleWork('${k}')">♥</button></div><b>Работа мастера</b><small>${m.name}</small></article>`}).join('')}</div>`:empty('Нет сохранённых работ','Сохраняйте фото работ сердечком.')}}
 function empty(h,p){return `<div class="favorite-page-empty"><span>♡</span><h2>${h}</h2><p>${p}</p></div>`}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderSnap(b.dataset.filter)});
 document.querySelectorAll('[data-fav-tab]').forEach(b=>b.onclick=()=>renderFavorites(b.dataset.favTab));
 document.getElementById('worksViewerClose')?.addEventListener('click',closeWorksViewer);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWorksViewer()});
 setupMasterWorksAdd();renderSnap();renderFavorites();
+
+window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().catch(()=>{}));
+
+
+async function pnHydrateSecondaryDirectory(){
+ try{
+  if(!window.PNRanking?.hydrate)return;
+  await window.PNRanking.hydrate(masters);
+  renderFavorites(document.querySelector('[data-fav-tab].active')?.dataset.favTab||'masters');
+  renderSnap(document.querySelector('[data-filter].active')?.dataset.filter||'all');
+ }catch(e){console.warn('secondary directory sync',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydrateSecondaryDirectory,70));

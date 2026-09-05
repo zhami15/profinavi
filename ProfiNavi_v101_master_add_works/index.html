@@ -24,7 +24,8 @@ body.welcome-page{margin:0;background:linear-gradient(180deg,#fff9fc 0%,#fff 55%
 .welcome-choice.master .icon{background:#ffe5f2}
 .welcome-note{text-align:center;color:#a3959d;font-size:10px;margin-top:20px}
 </style>
-</head>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#ff4fa3"><link rel="apple-touch-icon" href="icon-192.png"></head>
 <body class="welcome-page">
 <main class="welcome-shell">
   <section class="welcome-brand">
@@ -60,5 +61,6 @@ masterLink.href='master-login.html';
 masterLink.addEventListener('click',()=>localStorage.setItem('pn_last_mode','master'));
 </script>
 <script src="pn-map.js"></script>
-</body>
+<script src="pn-i18n.js"></script>
+<script src="pn-pwa.js"></script></body>
 </html>

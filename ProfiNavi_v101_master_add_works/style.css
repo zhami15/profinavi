@@ -2871,3 +2871,33 @@ img{max-width:100%}
 .pn-rating-photo{display:flex;align-items:center;justify-content:space-between;text-align:left;border:1px solid #eee7ea;border-radius:15px;padding:12px 14px;margin-top:10px;cursor:pointer}.pn-rating-photo span{font-weight:650}.pn-rating-photo small{color:#9a8f94}
 .pn-rating-previews{display:flex;gap:8px;margin-top:10px}.pn-rating-previews img{width:58px;height:58px;border-radius:12px;object-fit:cover}.pn-rating-submit{width:100%;border:0;border-radius:15px;padding:14px;margin-top:16px;background:var(--pink,#f35c9d);color:#fff;font:inherit;font-weight:700}.pn-rating-submit:disabled{opacity:.38}.pn-rating-later{border:0;background:transparent;color:#887d82;padding:12px;font:inherit}.pn-rating-thanks{padding:35px 10px}.pn-rating-thanks>div{margin:auto;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:#fff0f6;color:var(--pink,#f35c9d);font-size:28px;font-weight:700}.pn-rating-thanks p{color:#81767b}
 @media(min-width:600px){.pn-rating-overlay{align-items:center;padding:20px}.pn-rating-sheet{border-radius:24px}}
+
+
+/* v125 language + install */
+.lang-flag-btn{
+  width:42px;height:42px;border:1px solid #f0dbe6;background:#fff;border-radius:14px;
+  display:grid;place-items:center;font-size:22px;line-height:1;cursor:pointer;
+  box-shadow:0 5px 16px rgba(40,20,30,.05);padding:0;
+}
+.install-card{
+  font:inherit;color:inherit;text-align:left;cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+}
+.install-card .install-icon{
+  width:34px;height:34px;border-radius:11px;background:#fff;display:grid;place-items:center;
+  font-size:22px;font-weight:800;color:#ff4fa3;
+}
+.install-card:active{transform:scale(.98)}
+.install-card:disabled{opacity:.72;cursor:default}
+.install-help-card{text-align:center}
+.install-help-icon{
+  margin:4px auto 12px;width:58px;height:58px;border-radius:19px;background:#fff0f7;
+  display:grid;place-items:center;font-size:28px;color:#ff4fa3;
+}
+.install-help-card h2{margin:4px 0 8px}
+.install-help-card p{color:#7f7078;line-height:1.5;margin:0 0 18px}
+
+.master-publish-btn{margin-top:10px;border:1px solid #ff4fa3;background:#fff;color:#ff4fa3;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}.master-publish-btn.is-published{background:#fff3f8;color:#b42368;border-color:#ffc2dc}
+
+/* v128 — trustworthy marketplace rating states */
+.pn-real-rating{font-weight:800;color:#2f2930;white-space:nowrap}.pn-real-rating small{font-size:.82em;color:#8d7d85;font-weight:700}.pn-new-master-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#fff0f7;color:#d72f83;font-size:11px;font-weight:800;white-space:nowrap}.pn-no-rating{color:#9b8d94;font-size:11px;font-weight:700;white-space:nowrap}.master-stats .pn-new-master-badge,.master-stats .pn-no-rating{line-height:1.2}.profile-rating .pn-new-master-badge{font-size:12px;padding:5px 9px}

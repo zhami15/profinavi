@@ -12,11 +12,11 @@
   <meta name="apple-mobile-web-app-title" content="ProfiNavi" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-</head>
+<link rel="apple-touch-icon" href="icon-192.png"></head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <span class="topbar-spacer" aria-hidden="true"></span>
+      <button class="lang-flag-btn" type="button" data-pn-lang-toggle onclick="PNI18N.toggle()" aria-label="Кыргызча">🇰🇬</button>
       <div class="logo">Profi<span>Navi</span></div>
       <button class="avatar-btn" id="openAccount" aria-label="Аккаунт"></button>
     </header>
@@ -27,11 +27,11 @@
         <h1>Найди мастера рядом</h1>
         <p class="sub">Смотри работы, услуги, цены и выбирай мастера рядом с собой.</p>
       </div>
-      <div class="hero-card">
-        <span>💅</span>
-        <strong>Бишкек</strong>
-        <small>4 мастера</small>
-      </div>
+      <button class="hero-card install-card" id="installProfiNavi" type="button" aria-label="Установить ProfiNavi">
+        <span class="install-icon">↓</span>
+        <strong>Установить</strong>
+        <small>На экран телефона</small>
+      </button>
     </section>
 
     <section class="upcoming-booking" id="upcomingBooking" aria-live="polite"></section>
@@ -143,6 +143,17 @@
 
 
 
+
+  <div class="modal hidden" id="installHelpModal">
+    <div class="account-card install-help-card">
+      <button class="close" type="button" id="closeInstallHelp">×</button>
+      <div class="install-help-icon">⌂</div>
+      <h2>Добавить на главный экран</h2>
+      <p id="installHelpText">Чтобы добавить ProfiNavi на главный экран iPhone: нажмите «Поделиться» в Safari, затем «На экран Домой».</p>
+      <button class="primary full" type="button" id="installHelpOk">Готово</button>
+    </div>
+  </div>
+
   <div class="modal hidden" id="accountModal">
     <div class="account-card client-account-card">
       <button class="close" data-close="accountModal">×</button>
@@ -150,10 +161,60 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-client.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0"></script>
+  <script src="supabase-client.js"></script><script src="pn-data.js"></script><script src="pn-ranking.js"></script>
   <script src="script.js"></script>
 
 <script src="pn-map.js"></script>
-</body>
+
+<script>
+(()=>{
+ let deferredInstallPrompt=null;
+ const btn=document.getElementById('installProfiNavi');
+ const modal=document.getElementById('installHelpModal');
+ const help=document.getElementById('installHelpText');
+ const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+ const openHelp=(text)=>{
+   if(text)help.textContent=text;
+   modal?.classList.remove('hidden');
+ };
+ const closeHelp=()=>modal?.classList.add('hidden');
+
+ window.addEventListener('beforeinstallprompt',e=>{
+   e.preventDefault();
+   deferredInstallPrompt=e;
+ });
+ window.addEventListener('appinstalled',()=>{
+   deferredInstallPrompt=null;
+   if(btn){
+     btn.querySelector('strong').textContent='Уже установлено';
+     btn.disabled=true;
+   }
+ });
+ btn?.addEventListener('click',async()=>{
+   if(isStandalone()){
+     openHelp('ProfiNavi уже установлен на вашем устройстве.');
+     return;
+   }
+   if(deferredInstallPrompt){
+     deferredInstallPrompt.prompt();
+     try{await deferredInstallPrompt.userChoice}catch(e){}
+     deferredInstallPrompt=null;
+     return;
+   }
+   const isiOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+   if(isiOS){
+     openHelp('Чтобы добавить ProfiNavi на главный экран iPhone: нажмите «Поделиться» в Safari, затем «На экран Домой».');
+   }else{
+     openHelp('Откройте меню браузера и выберите «Установить приложение» или «Добавить на главный экран».');
+   }
+ });
+ document.getElementById('closeInstallHelp')?.addEventListener('click',closeHelp);
+ document.getElementById('installHelpOk')?.addEventListener('click',closeHelp);
+ modal?.addEventListener('click',e=>{if(e.target===modal)closeHelp()});
+})();
+</script>
+
+<script src="pn-i18n.js"></script>
+<script src="pn-pwa.js"></script></body>
 </html>

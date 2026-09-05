@@ -6,12 +6,8 @@
  }catch(e){}
 })();
 
-const masters=[
- {name:'Tunuk Nails',avatar:'assets/tunuk.png'},
- {name:'Adel Beauty',avatar:'assets/adel.png'},
- {name:'Alya Lashes',avatar:'assets/alya.png'},
- {name:'Mira Brows',avatar:'assets/mira.png'}
-];
+const masters=window.PNCloneMasters();
+window.masters=masters;
 function getBookings(){const x=JSON.parse(localStorage.getItem('pn_bookings')||'[]');return Array.isArray(x)?x:[]}
 function getChats(){return JSON.parse(localStorage.getItem('pn_chats')||'{}')}
 function saveChats(v){localStorage.setItem('pn_chats',JSON.stringify(v))}
@@ -31,8 +27,9 @@ const bookingId=q.get('booking');
 const bookings=getBookings();
 const booking=bookings.find((b,i)=>String(b.id||i)===String(bookingId))||null;
 if(!booking){location.replace('chats.html')}
+if(booking && booking.status==='pending'){location.replace('chats.html')}
 
-let m=masters[masterIndex]||masters[0];
+let m=masters[masterIndex]||null;try{const cached=JSON.parse(localStorage.getItem(`pn_dynamic_master_${masterIndex}`)||'null');if(cached)m=cached}catch(e){};m=m||masters[0];
 if(masterIndex===0){
  try{
    const p=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
@@ -54,6 +51,7 @@ function markClientRead(){
    reads[key]=Date.now();
  }
  saveClientReadAt(reads);
+ if(booking?.syncedToSupabase&&window.PNData)PNData.listConversations().then(cs=>{const c=cs.find(x=>String(x.booking_id)===String(booking.id));if(c)return PNData.markConversationRead(c.id)}).catch(()=>{});
 }
 function messages(){return getChats()[key]||[]}
 function notifyMaster(){
@@ -86,16 +84,30 @@ function render(){
 markClientRead();
 render();
 
-document.getElementById('chatPageForm').onsubmit=e=>{
+document.getElementById('chatPageForm').onsubmit=async e=>{
  e.preventDefault();
  if(isChatExpired(booking))return;
  const input=document.getElementById('chatPageInput'),text=input.value.trim();
  if(!text)return;
- const all=getChats();all[key]=all[key]||[];
- all[key].push({from:'client',text,ts:Date.now(),kind:'message'});
- saveChats(all);input.value='';render();
+ try{
+  if(booking.syncedToSupabase&&window.PNData){
+   const cs=await PNData.listConversations(),c=cs.find(x=>String(x.booking_id)===String(booking.id));
+   if(!c)throw new Error('Чат ещё не открыт мастером');
+   await PNData.sendMessage(c.id,text);
+   await pnHydrateChatsFromBackend();
+  }else{
+   const all=getChats();all[key]=all[key]||[];
+   all[key].push({from:'client',text,ts:Date.now(),kind:'message'});saveChats(all);
+  }
+ }catch(err){alert('Не удалось отправить сообщение: '+err.message);return}
+ input.value='';render();
 };
 
 window.addEventListener('storage',e=>{
  if(['pn_chats','pn_bookings'].includes(e.key))location.reload();
 });
+
+async function pnHydrateChatsFromBackend(){if(!window.PNData||!window.PNAuth)return;const u=await PNAuth.currentUser();if(!u)return;const cs=await PNData.listConversations(),cache=JSON.parse(localStorage.getItem('pn_chats')||'{}'),allowed=new Set(cs.map(c=>String(c.booking_id)));getBookings().filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'client':'master',text:m.body,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}localStorage.setItem('pn_chats',JSON.stringify(cache))}
+window.addEventListener('DOMContentLoaded',()=>pnHydrateChatsFromBackend().catch(e=>console.warn('chat backend',e)));
+
+window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>pnHydrateChatsFromBackend().then(()=>render()).catch(()=>{})));

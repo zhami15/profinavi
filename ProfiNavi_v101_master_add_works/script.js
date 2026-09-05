@@ -21,25 +21,9 @@
  }
 })();
 
-const masters=[
- {name:'Tunuk Nails',cat:'nails',district:'Vefa Center · Байтик Баатыра 98',walk:'на месте',price:'1400 сом',rating:'4.9',experience:'Опыт 5 лет',saves:142,emoji:'💅',avatar:'assets/tunuk-new.png',desc:'Аккуратное покрытие, френч и нежные дизайны. Подходит тем, кто любит clean girl nails.',ig:'tunuk_nails',lat:42.857255,lng:74.609848,
-  gallery:['assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg'],
-  services:[{name:'Френч с дизайном',desc:'Нежный френч с цветами',price:'1500 сом',time:'2 ч.'},{name:'Омбре',desc:'Плавный переход цветов',price:'1300 сом',time:'2 ч.'},{name:'Наращивание',desc:'Классическое наращивание',price:'1700 сом',time:'2,5 ч.'},{name:'Маникюр + покрытие',desc:'Покрытие в один тон',price:'900 сом',time:'1,5 ч.'},{name:'Дизайн ногтей',desc:'Дизайн на выбор',price:'1200 сом',time:'1,5 ч.'}]},
- {name:'Adel Beauty',cat:'nails',district:'Нижний Джал',walk:'на месте',price:'1200 сом',rating:'4.8',experience:'Опыт 4 года',saves:96,emoji:'🎀',avatar:'assets/adel-new.png',desc:'Маникюр, укрепление и дизайны на каждый день. Мягкий розовый стиль и аккуратная форма.',ig:'adel_nails',lat:42.842427,lng:74.566250,
-  gallery:['assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png'],
-  services:[{name:'Маникюр',desc:'Обработка и покрытие',price:'1200 сом',time:'1,5 ч.'},{name:'Укрепление',desc:'Укрепление гелем',price:'1500 сом',time:'2 ч.'},{name:'Френч',desc:'Классический френч',price:'1400 сом',time:'2 ч.'},{name:'Дизайн',desc:'Дизайн на выбор',price:'1600 сом',time:'2 ч.'},{name:'Снятие + маникюр',desc:'Полный комплекс',price:'1300 сом',time:'2 ч.'}]},
- {name:'Alya Lashes',cat:'lashes',district:'5 микрорайон, дом 2',walk:'на месте',price:'1000 сом',rating:'4.7',experience:'Опыт 6 лет',saves:83,emoji:'👁️',avatar:'assets/alya-new.png',desc:'Наращивание ресниц: натуральный эффект, лисий эффект, мокрый эффект.',ig:'alya_lashes',lat:42.873765,lng:74.636127},
- {name:'Mira Brows',cat:'brows',district:'Asia Mall · Ч. Айтматова 3',walk:'на месте',price:'700 сом',rating:'4.9',experience:'Опыт 3 года',saves:74,emoji:'🤎',avatar:'assets/mira-new.png',desc:'Коррекция, окрашивание и долговременная укладка бровей.',ig:'mira_brows',lat:42.855421,lng:74.586573},
- {name:'Nursaule Nails',cat:'nails',district:'Asia Mall',walk:'на месте',price:'900 сом',rating:'4.8',experience:'Опыт 4 года',saves:68,emoji:'💅',avatar:'assets/nursaule-new.png',desc:'Маникюр и длинный овал. Аккуратные формы и современные дизайны.',ig:'nursaule_nails',lat:42.85575,lng:74.58710,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр + покрытие',desc:'Однотонное покрытие',price:'900 сом',time:'1,5 ч.'}]},
- {name:'Diana Nail Art',cat:'nails',district:'Токтоналиева 52 · Политех',walk:'на месте',price:'1500 сом',rating:'4.9',experience:'Опыт 5 лет',saves:121,emoji:'🎨',avatar:'assets/diana-new.png',desc:'Ручная роспись и сложные дизайны ногтей.',ig:'diana_nail_art',lat:42.84975,lng:74.57865,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр со сложным дизайном',desc:'Ручная роспись',price:'1500 сом',time:'2,5 ч.'}]},
- {name:'Valeria Nails',cat:'nails',district:'Аламедин Grand · Курманджан Датка 226',walk:'на месте',price:'1000 сом',rating:'4.8',experience:'Опыт 5 лет',saves:89,emoji:'🤍',avatar:'assets/valeria-new.png',desc:'Френч и аккуратный повседневный маникюр.',ig:'valeria_nails',lat:42.88535,lng:74.63740,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Френч',desc:'Классический или цветной',price:'1000 сом',time:'2 ч.'}]},
- {name:'Marina Nails',cat:'nails',district:'Район Карла Маркса',walk:'на месте',price:'1000 сом',rating:'4.9',experience:'Опыт 8 лет',saves:103,emoji:'✨',avatar:'assets/marina-new.png',desc:'Маникюр и покрытие с вниманием к деталям.',ig:'marina_nails',lat:42.87480,lng:74.63080,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр + покрытие',desc:'Полный комплекс',price:'1000 сом',time:'1,5 ч.'}]},
- {name:'Nina Nails',cat:'nails',district:'5 микрорайон, дом 2 · салон «Алия»',walk:'на месте',price:'1000 сом',rating:'4.9',experience:'Опыт 11 лет',saves:156,emoji:'🌸',avatar:'assets/nina-new.png',desc:'Качественный и аккуратный маникюр с большим опытом работы.',ig:'nina_nails',lat:42.87370,lng:74.63605,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр',desc:'Обработка и однотонное покрытие',price:'1000 сом',time:'1,5 ч.'}]},
- {name:'Nellinails Studio',cat:'nails',district:'Куйбышева 93 · ЦУМ / Дордой Плаза',walk:'на месте',price:'1000 сом',rating:'4.8',experience:'Студия маникюра',saves:134,emoji:'💗',avatar:'assets/nellinails-new.png',desc:'Маникюр, педикюр и услуга в 4 руки за 1 час 30 минут.',ig:'nellinails_studio',lat:42.87725,lng:74.61475,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр однотонный',desc:'Однотонное покрытие',price:'1000 сом',time:'1,5 ч.'},{name:'Педикюр однотонный',desc:'Педикюр с покрытием',price:'1200 сом',time:'1,5 ч.'}]},
- {name:'Bogdan Nails',cat:'nails',district:'Бишкек · принимает на дому',walk:'на месте',price:'1700 сом',rating:'4.7',experience:'Индивидуальная запись',saves:61,emoji:'🖤',avatar:'assets/bogdan-new.png',desc:'Фиксированная стоимость с ремонтом, дизайном и массажем рук.',ig:'bogdan_nails',lat:42.86650,lng:74.59830,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр полный комплекс',desc:'Ремонт, дизайн и массаж рук включены',price:'1700 сом',time:'3 ч.'}]}
-];
-const masterWorkSets = [['assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg'], ['assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg'], ['assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg'], ['assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg'], ['assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg'], ['assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg'], ['assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg'], ['assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg'], ['assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg'], ['assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg'], ['assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg']];
-masters.forEach((m,i)=>{m.gallery=masterWorkSets[i]||masterWorkSets[0];});
+const masters=window.PNCloneMasters();
+window.masters=masters;
+const masterWorkSets=window.PN_MASTER_WORK_SETS.map(x=>[...x]);
 try{const custom=JSON.parse(localStorage.getItem('pn_master_services_0')||'null');if(Array.isArray(custom)&&custom.length){masters[0].services=custom.map(x=>({name:x.name,desc:'',price:`${Number(x.price)||0} сом`,time:x.time||'1,5 ч.',_promo:x.promo||'',_discount:Number(x.discount)||0}));masters[0].price=masters[0].services[0]?.price||masters[0].price;}}catch(e){}
 
 
@@ -192,8 +176,14 @@ function distanceLabel(km){
  return `${km.toFixed(km<10?1:0)} км от вас`;
 }
 function sortedMasters(list){
- if(!userLocation) return list;
- return list.slice().sort((a,b)=>distanceKm(userLocation.lat,userLocation.lng,a.lat,a.lng)-distanceKm(userLocation.lat,userLocation.lng,b.lat,b.lng));
+ const ranked=window.PNRanking?.rank?window.PNRanking.rank(list):list.slice();
+ if(!userLocation)return ranked;
+ // Keep marketplace rank primary; distance is only a tie-breaker for similar scores.
+ return ranked.slice().sort((a,b)=>{
+   const ds=Math.abs(Number(b.topScore||0)-Number(a.topScore||0));
+   if(ds>=3)return Number(b.topScore||0)-Number(a.topScore||0);
+   return distanceKm(userLocation.lat,userLocation.lng,a.lat,a.lng)-distanceKm(userLocation.lat,userLocation.lng,b.lat,b.lng);
+ });
 }
 function renderUserLocationMarker(){
  if(!twoGisMap || !window.mapgl || !userLocation) return;
@@ -230,7 +220,7 @@ render();
 }
 
 function get2GisKey(){
- return String(window.PROFINAVI_2GIS_KEY || localStorage.getItem(TWO_GIS_KEY_STORAGE) || '899ec609-8768-48b6-9f00-f18100be8c71').trim();
+ return String(window.PROFINAVI_2GIS_KEY || localStorage.getItem(TWO_GIS_KEY_STORAGE) || '').trim();
 }
 function load2GisScript(){
  if(window.mapgl) return Promise.resolve();
@@ -324,7 +314,7 @@ function save2GisKey(){
 
 const grid=document.getElementById('mastersGrid');const search=document.getElementById('searchInput');
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
-const setFavs=v=>localStorage.setItem('pn_favs',JSON.stringify(v));
+const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
 const getFavWorks=()=>JSON.parse(localStorage.getItem('pn_fav_works')||'[]');
 const setFavWorks=v=>localStorage.setItem('pn_fav_works',JSON.stringify(v));
 const getChats=()=>JSON.parse(localStorage.getItem('pn_chats')||'{}');
@@ -429,14 +419,26 @@ function serviceItems(m){
    </div>`;
  }).join('');
 }
+
+function masterMatchesQuickDate(m,i,dateKey){
+ if(!dateKey)return true;
+ if(m?._backend){
+   const todayKey=localDateKey(new Date());
+   if(dateKey===todayKey){
+     return (m.services||[]).some(s=>Boolean(s.promo)||((s.newPrice!==null&&s.newPrice!==undefined)&&Number(s.newPrice)<Number(s.oldPrice||Infinity)));
+   }
+   return !!(m.slotMap?.[dateKey]?.length);
+ }
+ return (masterAvailability[dateKey]||[]).includes(i);
+}
 function render(){
  applyMasterProSyncToClientHome();
  const q=(search?.value||'').toLowerCase().trim();const favs=getFavs();
- const data=sortedMasters(masters.filter((m,i)=>(current==='all'||m.cat===current)&&(!availabilityDate||(masterAvailability[availabilityDate]||[]).includes(i))&&`${m.name} ${m.district} ${m.desc}`.toLowerCase().includes(q)));
+ const data=sortedMasters(masters.filter((m,i)=>(current==='all'||m.cat===current)&&masterMatchesQuickDate(m,i,availabilityDate)&&`${m.name} ${m.district} ${m.desc}`.toLowerCase().includes(q)));
  document.getElementById('countText').textContent=`Найдено: ${data.length}`;
  grid.innerHTML=data.map((m)=>{const i=masters.indexOf(m);return `<article class="master-card" onclick="openProfile(${i})">
   <div class="master-card-head">
-   <div class="master-identity"><img class="master-avatar" src="${m.avatar}" alt="Фото ${m.name}"><div><div class="name">${m.name}</div><div class="master-stats"><span>★ ${m.rating}</span><span>Район: ${m.area||'не указан'}</span></div></div></div>
+   <div class="master-identity"><img class="master-avatar" src="${m.avatar}" alt="Фото ${m.name}"><div><div class="name">${m.name}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${m.area||'не указан'}</span></div></div></div>
    <div class="save-wrap"><button class="fav-card" aria-label="Сохранить мастера" onclick="event.stopPropagation();toggleFav(${i})">${favs.includes(i)?'♥':'♡'}</button><small>${m.saves+(favs.includes(i)?1:0)} сохранений</small></div>
   </div>
   <div class="works-carousel">${galleryItems(m)}</div>
@@ -560,35 +562,15 @@ function renderUpcomingBooking(){
  if(!bookings.length){box.innerHTML=`<article class="booking-home-card empty"><div><p class="booking-home-kicker">Мои записи</p><h3 style="margin:0 0 5px">Пока нет ближайших записей</h3><p style="margin:0;color:#766b70">Можно записываться к разным мастерам и на несколько услуг.</p></div><div class="booking-home-empty-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="15" rx="3"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg></div></article>`;return}
  box.innerHTML=`<div class="booking-list-wrap"><div class="booking-list-title"><p class="booking-home-kicker">Мои записи</p><span>${bookings.length}</span></div>${bookings.map((b,idx)=>{
   const m=masters[b.master]||masters[0];
-  const confirmed=b.status==='confirmed';
+  const confirmed=b.status==='confirmed'||b.status==='completed'||b.status==='done';
   const cancelled=b.status==='cancelled';
   const id=b.id||String(idx);
   const expired=isChatExpired(b);
-  const statusText=cancelled?'Отклонено':expired?'Чат завершён':confirmed?'Подтверждено':'Ожидает подтверждения';
+  const statusText=cancelled?'Отклонено':expired?'Чат завершён':b.status==='completed'||b.status==='done'?'Завершено':confirmed?'Подтверждено':'Ожидает подтверждения';
   const statusClass=cancelled?'cancelled':expired?'expired':confirmed?'confirmed':'pending';
-  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div><div class="booking-home-actions"><a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>${(!confirmed&&!cancelled&&!expired)?`<button class="ghost" onclick="confirmBookingDemo('${id}')">Демо: подтвердить</button>`:''}${(confirmed&&!expired)?`<button class="ghost" onclick="pnCompleteBookingDemo('${id}')">Демо: процедура завершена</button>`:''}</div><p class="booking-home-note">${cancelled?'Мастер отклонил эту запись. В чате есть автоматическое сообщение от мастера.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Можно написать мастеру сразу, пока заявка ожидает подтверждения.'}</p></article>`
+  const chatAction=confirmed?`<a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>`:'';
+  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${m.name}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${m.name}</button><p><b>${b.dateText||''} · ${b.time||''}</b></p><p>${b.service||'Услуга'}</p></div></div>${chatAction?`<div class="booking-home-actions">${chatAction}</div>`:''}<p class="booking-home-note">${cancelled?'Запись отклонена. Выберите другое свободное время.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Ожидаем подтверждения мастера. Чат откроется после подтверждения записи.'}</p></article>`
  }).join('')}</div>`;
-}
-async function confirmBookingDemo(id){
- const list=getBookings();
- const b=list.find(x=>String(x.id)===String(id));
- if(!b)return;
- try{if(window.PNData&&b.syncedToSupabase)await window.PNData.updateBookingStatus(id,'approved')}catch(e){alert('Не удалось обновить запись в базе: '+e.message);return}
- b.status='confirmed';
- localStorage.setItem('pn_bookings',JSON.stringify(list));
- const m=masters[b.master]||masters[0];
- const key=`pn_chat_${b.master}`;
- const messages=JSON.parse(localStorage.getItem(key)||'null')||[];
- const exists=messages.some(x=>x.kind==='booking-confirmed' && String(x.bookingId||'')===String(id));
- if(!exists){
-  messages.push({from:'master',kind:'booking-confirmed',bookingId:id,text:`Мастер подтвердил запись. Спасибо за запись! Буду ждать вас ${b.dateText||''} в ${b.time||''} 🌸`,time:'сейчас'});
-  localStorage.setItem(key,JSON.stringify(messages));
- }
- const unread=getUnread();
- unread[String(b.master)]=Number(unread[String(b.master)]||0)+1;
- setUnread(unread);
- renderUpcomingBooking();
- updateStats();
 }
 
 render();
@@ -865,11 +847,6 @@ function pnCheckPendingReview(){
  const b=getBookings().filter(x=>pnBookingFinished(x)&&!x.reviewed&&!pnHasReview(x.id)).sort((a,b)=>(bookingDateTime(b)?.getTime()||0)-(bookingDateTime(a)?.getTime()||0))[0];
  if(b)setTimeout(()=>pnOpenRatingPopup(b),500);
 }
-async function pnCompleteBookingDemo(id){
- const list=getBookings(),b=list.find(x=>String(x.id)===String(id));if(!b)return;
- try{if(window.PNData&&b.syncedToSupabase)await window.PNData.updateBookingStatus(id,'completed')}catch(e){alert('Не удалось завершить запись в базе: '+e.message);return}
- b.status='completed';localStorage.setItem('pn_bookings',JSON.stringify(list));renderUpcomingBooking();pnOpenRatingPopup(b);
-}
 window.addEventListener('DOMContentLoaded',pnCheckPendingReview);
 window.addEventListener('pageshow',pnCheckPendingReview);
 
@@ -911,3 +888,25 @@ async function pnRefreshVisibleMaps(){
 }
 window.addEventListener('load',()=>setTimeout(pnRefreshVisibleMaps,250));
 window.addEventListener('pageshow',()=>setTimeout(pnRefreshVisibleMaps,250));
+
+window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().catch(()=>{}));
+
+window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>pnHydrateClientData().catch(()=>{})));
+
+async function pnHydratePublicMasterHome(){
+ try{const b=await window.PNBackendSync?.hydratePublicMasterCache?.(0);if(!b)return;applyMasterProSyncToClientHome();render();renderUpcomingBooking();updateStats();}catch(e){console.warn('public master sync',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydratePublicMasterHome,120));
+
+
+async function pnHydrateRankedDirectory(){
+ try{
+  if(!window.PNRanking?.hydrate)return;
+  await window.PNRanking.hydrate(masters);
+  render();
+  try{render2GisMarkers()}catch(e){}
+  try{renderHomeLeafletMarkers()}catch(e){}
+ }catch(e){console.warn('ranked directory sync',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydrateRankedDirectory,60));
+window.addEventListener('pageshow',()=>setTimeout(pnHydrateRankedDirectory,60));

@@ -6,12 +6,8 @@
  }catch(e){}
 })();
 
-const masters=[
- {name:'Tunuk Nails',avatar:'assets/tunuk.png'},
- {name:'Adel Beauty',avatar:'assets/adel.png'},
- {name:'Alya Lashes',avatar:'assets/alya.png'},
- {name:'Mira Brows',avatar:'assets/mira.png'}
-];
+const masters=window.PNCloneMasters();
+window.masters=masters;
 function getBookings(){const x=JSON.parse(localStorage.getItem('pn_bookings')||'[]');return Array.isArray(x)?x:[]}
 function getChats(){return JSON.parse(localStorage.getItem('pn_chats')||'{}')}
 function getRead(){return JSON.parse(localStorage.getItem('pn_client_chat_read_at_v49')||'{}')}
@@ -34,7 +30,7 @@ function renderClientChatList(){
  }
 
  box.innerHTML=bookings.map((b,i)=>{
-   let m=masters[Number(b.master)||0]||masters[0];
+   const mid=Number(b.master)||0;let m=masters[mid]||null;try{const cached=JSON.parse(localStorage.getItem(`pn_dynamic_master_${mid}`)||'null');if(cached)m=cached}catch(e){};m=m||masters[0];
    if(Number(b.master||0)===0){
      try{
        const p=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
@@ -47,7 +43,7 @@ function renderClientChatList(){
    const last=msgs[msgs.length-1];
    const lastMaster=[...msgs].reverse().find(x=>x.from==='master');
    const unread=!!(lastMaster && Number(lastMaster.ts||0)>Number(reads[key]||0));
-   const status=expired(b)?'Чат закрыт':b.status==='confirmed'?'Запись подтверждена':b.status==='cancelled'?'Запись отклонена':'Ожидает подтверждения';
+   const status=expired(b)?'Чат закрыт':b.status==='completed'||b.status==='done'?'Запись завершена':b.status==='confirmed'?'Запись подтверждена':b.status==='cancelled'?'Запись отменена':'Ожидает подтверждения';
 
    return `<a class="chat-list-item ${unread?'is-unread':''}" href="chat.html?master=${b.master||0}&booking=${encodeURIComponent(key)}">
      <img src="${m.avatar}" alt="${m.name}">
@@ -79,3 +75,8 @@ window.addEventListener('storage',e=>{
 });
 
 
+
+async function pnHydrateChatsFromBackend(){if(!window.PNData||!window.PNAuth)return;const u=await PNAuth.currentUser();if(!u)return;const cs=await PNData.listConversations(),cache=JSON.parse(localStorage.getItem('pn_chats')||'{}'),allowed=new Set(cs.map(c=>String(c.booking_id)));getBookings().filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'client':'master',text:m.body,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}localStorage.setItem('pn_chats',JSON.stringify(cache))}
+window.addEventListener('DOMContentLoaded',()=>pnHydrateChatsFromBackend().catch(e=>console.warn('chat backend',e)));
+
+window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>pnHydrateChatsFromBackend().then(()=>location.reload()).catch(()=>{})));

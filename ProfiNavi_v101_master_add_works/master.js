@@ -79,18 +79,12 @@ function pushMasterMessage(bookingId,text,kind='message'){
 const GREETING_KEY='pn_master_auto_greeting';
 const PROFILE_KEY='pn_master_profile_0';
 
-const DEFAULT_SERVICES=[
- {name:'Френч с дизайном',price:1500,time:'2 ч.',promo:'Знакомство с мастером',discount:20,image:'assets/work-01.jpg'},
- {name:'Омбре',price:1300,time:'2 ч.',promo:'',discount:0,image:'assets/work-02.jpg'},
- {name:'Наращивание',price:1700,time:'2,5 ч.',promo:'',discount:0,image:'assets/work-03.jpg'},
- {name:'Маникюр + покрытие',price:900,time:'1,5 ч.',promo:'',discount:0,image:'assets/work-04.jpg'},
- {name:'Дизайн ногтей',price:1200,time:'1,5 ч.',promo:'',discount:0,image:'assets/work-05.jpg'}
-];
+const DEFAULT_SERVICES=[];
 const DEFAULT_PROFILE={
- name:'Tunuk Nails', area:'Vefa Center', address:'Байтик Баатыра 98',
- rating:'4.9', experience:'5 лет', about:'Маникюр • дизайн • наращивание',
- avatar:'assets/tunuk-new.png',
- works:['assets/work-01.jpg','assets/work-02.jpg','assets/work-03.jpg','assets/work-04.jpg','assets/work-05.jpg','assets/work-06.jpg']
+ name:'Мастер ProfiNavi', area:'', address:'',
+ rating:0, reviewsCount:0, experience:'', about:'',
+ avatar:'icon-192.png',
+ works:[]
 };
 
 function jget(k,d){try{return JSON.parse(localStorage.getItem(k)||'null')??d}catch{return d}}
@@ -105,9 +99,13 @@ function services(){
  const imageByName=Object.fromEntries(DEFAULT_SERVICES.map(x=>[x.name,x.image]));
  return saved.map(s=>({...s,image:(s.image===undefined?imageByName[s.name]:s.image)}));
 }
-function saveServices(v){jset(SERVICE_KEY,v)}
+function saveServices(v){jset(SERVICE_KEY,v);window.PNData?.replaceMasterServices?.(v).catch(e=>console.warn('services backend',e))}
 function profile(){return {...DEFAULT_PROFILE,...jget(PROFILE_KEY,{})}}
-function saveProfile(v){jset(PROFILE_KEY,v)}
+function saveProfile(v){jset(PROFILE_KEY,v);window.PNData?.saveMasterProfile?.(v).then(()=>Array.isArray(v.works)?PNData.replaceMasterWorks(v.works):null).catch(e=>console.warn('profile backend',e))}
+async function toggleMasterPublish(){
+ const p=profile(),next=!p.is_published;
+ try{if(!window.PNData)throw new Error('База данных не загрузилась');const saved=await PNData.setMasterPublished(next);jset(PROFILE_KEY,{...p,is_published:saved});renderProfile()}catch(e){alert('Не удалось изменить публикацию: '+e.message)}
+}
 function money(v){return new Intl.NumberFormat('ru-RU').format(Number(v)||0)+' сом'}
 function sameDay(a,b){const x=new Date(a),y=new Date(b);return x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate()}
 function bookingRevenue(b){const s=services().find(x=>x.name===b.service);return s?.price||1200}
@@ -196,8 +194,18 @@ function masterHeader(title,sub=''){
    </section>
  </div>`;
 }
-function logoutMaster(){localStorage.removeItem(MASTER_KEY);location.href='index.html'}
+async function logoutMaster(){try{await window.PNAuth?.signOut?.()}catch(e){}localStorage.removeItem(MASTER_KEY);location.href='index.html'}
 function updateClientUnread(){let u=jget('pn_client_chat_unread',{});u['thread_master_0_client_main']=1;jset('pn_client_chat_unread',u)}
+
+async function pnConversationForBooking(bookingId){
+ if(!window.PNData)return null;
+ try{const cs=await PNData.listConversations();return cs.find(c=>String(c.booking_id)===String(bookingId))||null}catch(e){return null}
+}
+async function pnSendBookingMessage(bookingId,text){
+ const c=await pnConversationForBooking(bookingId);if(!c)return false;
+ await PNData.sendMessage(c.id,text);return true;
+}
+
 
 function ensureAutoGreeting(b){
  const greeting=localStorage.getItem(GREETING_KEY)||'Здравствуйте! Спасибо за запись 🤍 Если будут вопросы — напишите мне здесь.';
@@ -224,16 +232,18 @@ function sendApprovalMessage(b){
   }
 }
 
-function confirmBooking(id,noReload=false){
+async function confirmBooking(id,noReload=false){
  const bookings=getBookings(),b=bookings.find(x=>String(x.id)===String(id));
  if(!b)return;
  if(b.status!=='confirmed'){
+   if(b.syncedToSupabase&&window.PNData){try{await PNData.updateBookingStatus(id,'approved')}catch(e){alert('Не удалось подтвердить запись: '+e.message);return}}
    b.status='confirmed';
    b.confirmedAt=new Date().toISOString();
    setBookings(bookings);
    const d=new Date(b.date);
    const dateText=!Number.isNaN(d.getTime())?d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'}):'';
-   pushMasterMessage(b.id,`Ваша запись подтверждена${dateText?` на ${dateText}`:''}${b.time?` в ${b.time}`:''}. Жду вас!`,'booking-confirmed');
+   const approvalText=`Ваша запись подтверждена${dateText?` на ${dateText}`:''}${b.time?` в ${b.time}`:''}. Жду вас!`;
+   if(b.syncedToSupabase&&window.PNData){try{await pnSendBookingMessage(b.id,approvalText)}catch(e){console.warn('approval message backend',e)}}else pushMasterMessage(b.id,approvalText,'booking-confirmed');
  }
  if(!noReload)location.reload();
 }
@@ -255,29 +265,16 @@ function sendRejectionMessage(b){
   }
 }
 
-function cancelBooking(id,noReload=false){
+async function cancelBooking(id,noReload=false){
  const bookings=getBookings(),b=bookings.find(x=>String(x.id)===String(id));
  if(!b)return;
  if(b.status!=='cancelled'){
+   if(b.syncedToSupabase&&window.PNData){try{await PNData.updateBookingStatus(id,'declined')}catch(e){alert('Не удалось отклонить запись: '+e.message);return}}
    b.status='cancelled';
    b.cancelledAt=new Date().toISOString();
    setBookings(bookings);
 
-   const d=new Date(b.date);
-   const dateText=!Number.isNaN(d.getTime())?d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'}):'';
-   const chats=jget(CHAT_KEY,{});
-   const key=String(b.id);
-   chats[key]=chats[key]||[];
-   const exists=chats[key].some(msg=>msg.kind==='booking-declined');
-   if(!exists){
-     chats[key].push({
-       from:'master',
-       text:`К сожалению, запись${dateText?` на ${dateText}`:''}${b.time?` в ${b.time}`:''} отклонена. Вы можете выбрать другое свободное время.`,
-       ts:Date.now(),
-       kind:'booking-declined'
-     });
-     jset(CHAT_KEY,chats);
-   }
+   // Отклонённая заявка не создаёт чат: клиент увидит статус записи.
  }
  if(!noReload)location.reload();
 }
@@ -288,7 +285,7 @@ function getSlots(){
  for(let i=0;i<7;i++){let x=new Date(d);x.setDate(x.getDate()+i);out[x.toISOString().slice(0,10)]=['10:00','11:30','13:00','15:00','17:30']}
  return out;
 }
-function saveSlots(s){jset(SLOT_KEY,s)}
+function saveSlots(s){jset(SLOT_KEY,s);window.PNData?.replaceAvailability?.(s).catch(e=>console.warn('slots backend',e))}
 function openSlotEditor(){
  const slots=getSlots(), key=new Date().toISOString().slice(0,10), current=(slots[key]||[]).join(', ');
  const val=prompt('Свободное время на сегодня. Введите через запятую:',current);
@@ -393,7 +390,7 @@ function renderDashboard(){
  const todayList=bookings.filter(b=>sameDay(b.date,today)), pending=bookings.filter(b=>b.status==='pending'), confirmed=todayList.filter(b=>b.status==='confirmed');
  const revenue=confirmed.reduce((s,b)=>s+bookingRevenue(b),0), key=today.toISOString().slice(0,10), slots=getSlots()[key]||[];
  root.innerHTML=`${masterHeader('Здравствуйте, '+(p.ownerName||session()?.name||p.name),'')}
- <section class="master-metrics"><article><small>Сегодня</small><b>${todayList.length}</b><span>записей</span></article><article><small>Доход</small><b>${money(revenue).replace(' сом','')}</b><span>сом</span></article><article><small>Рейтинг</small><b>${p.rating}</b><span>★</span></article></section>
+ <section class="master-metrics"><article><small>Сегодня</small><b>${todayList.length}</b><span>записей</span></article><article><small>Доход</small><b>${money(revenue).replace(' сом','')}</b><span>сом</span></article><article><small>Рейтинг</small><b>${Number(p.reviewsCount||0)>0?Number(p.rating||0).toFixed(1):'—'}</b><span>${Number(p.reviewsCount||0)>0?'★':'нет отзывов'}</span></article></section>
 
  <section class="master-section quick-approval-section">
    <div class="master-section-head"><h2>Подтвердить записи</h2>${pending.length?`<span class="pending-count">${pending.length}</span>`:''}</div>
@@ -437,11 +434,14 @@ function sendQuickReply(id,text){
  const b=getBookings().find(x=>String(x.id)===String(id));
  if(!b || masterChatExpired(b))return false;
  pushMasterMessage(id,text,'message');
+ if(b.syncedToSupabase&&window.PNData)pnSendBookingMessage(id,text).catch(e=>console.warn('message backend',e));
  return true;
 }
 function openChat(id){
  const booking=getBookings().find(x=>String(x.id)===String(id));
  if(!booking)return;
+ const existing=(jget(CHAT_KEY,{})[String(id)]||[]);
+ if(booking.status==='pending'&&!existing.length)return;
  markMasterRead(id);
 
  const overlay=document.createElement('div');
@@ -488,10 +488,10 @@ function openChat(id){
    overlay.querySelector('#closeChat').onclick=()=>{overlay.remove();renderChats()};
 
    const approve=overlay.querySelector('#chatApprove');
-   if(approve)approve.onclick=()=>{confirmBooking(id,true);draw()};
+   if(approve)approve.onclick=async()=>{await confirmBooking(id,true);draw()};
 
    const decline=overlay.querySelector('#chatDecline');
-   if(decline)decline.onclick=()=>{cancelBooking(id,true);draw()};
+   if(decline)decline.onclick=async()=>{await cancelBooking(id,true);draw()};
 
    overlay.querySelectorAll('.quick-replies button').forEach(btn=>{
      btn.onclick=()=>{sendQuickReply(id,btn.dataset.reply);draw()};
@@ -521,7 +521,7 @@ function saveGreeting(){
 function renderChats(){
  if(!requireMaster())return;
  const root=document.getElementById('masterRoot'),bookings=getBookings(),chats=jget(CHAT_KEY,{});
- const rows=[...bookings].sort((a,b)=>{
+ const rows=[...bookings].filter(b=>(chats[String(b.id)]||[]).length>0||['confirmed','completed','done'].includes(b.status)).sort((a,b)=>{
    const au=masterChatUnread(a.id)?1:0,bu=masterChatUnread(b.id)?1:0;
    if(au!==bu)return bu-au;
    return new Date(b.createdAt||b.date).getTime()-new Date(a.createdAt||a.date).getTime();
@@ -746,15 +746,14 @@ function openWorkActions(i){
  ov.onclick=e=>{if(e.target===ov)ov.remove()};
 }
 
-const MASTER_REVIEWS=[
- {name:'Алина',rating:5,service:'Маникюр + покрытие',text:'Очень аккуратная работа, всё понравилось. Обязательно вернусь.',date:'12 августа',verified:true,photos:['assets/work-01.jpg','assets/work-02.jpg']},
- {name:'Мээрим',rating:5,service:'Френч с дизайном',text:'Красиво, чисто и удобно. Результат полностью совпал с ожиданиями.',date:'9 августа',verified:true,photos:['assets/work-03.jpg']},
- {name:'Айжан',rating:5,service:'Дизайн ногтей',text:'Мастер внимательно выслушала пожелания и сделала именно тот дизайн, который я хотела.',date:'4 августа',verified:true,photos:['assets/work-04.jpg','assets/work-05.jpg','assets/work-06.jpg']},
- {name:'Диана',rating:5,service:'Маникюр + покрытие',text:'Очень приятная атмосфера и аккуратный маникюр. Носка отличная.',date:'29 июля',verified:true,photos:[]},
- {name:'Алина К.',rating:4,service:'Омбре',text:'Всё понравилось, особенно форма и обработка.',date:'22 июля',verified:true,photos:[]},
- {name:'Жибек',rating:5,service:'Наращивание',text:'Записалась впервые и осталась довольна. Приду ещё.',date:'15 июля',verified:true,photos:['assets/work-07.jpg']}
-];
+const MASTER_REVIEWS=[];
 
+
+function masterReviewList(){
+ const synced=!!session()?.userId;
+ if(synced){try{const x=JSON.parse(localStorage.getItem('pn_master_backend_reviews')||'[]');return Array.isArray(x)?x:[]}catch(e){return []}}
+ return MASTER_REVIEWS.filter(r=>r.verified);
+}
 
 function openReviewPhoto(src){
  const ov=document.createElement('div');
@@ -776,8 +775,8 @@ function renderReviewCard(r){
 }
 
 function showAllReviews(){
- const p=profile(),saved=JSON.parse(localStorage.getItem('pn_verified_reviews')||'[]').filter(r=>r.verified),reviewList=[...saved,...MASTER_REVIEWS.filter(r=>r.verified)],ov=document.createElement('div');ov.className='master-edit-profile-overlay';
- ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">‹ Назад</button><b>Отзывы</b><span></span></header><section class="reviews-full-summary"><strong>${p.rating}</strong><div>★★★★★</div><span>${MASTER_REVIEWS.filter(r=>r.verified).length} отзывов</span></section><section class="reviews-full-list">${reviewList.map(renderReviewCard).join('')}</section></div>`;
+ const p=profile(),reviewList=masterReviewList(),ov=document.createElement('div');ov.className='master-edit-profile-overlay';
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">‹ Назад</button><b>Отзывы</b><span></span></header><section class="reviews-full-summary">${reviewList.length?`<strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${Number(p.reviewsCount||reviewList.length)} отзывов</span>`:'<strong>—</strong><span>Пока нет отзывов</span>'}</section><section class="reviews-full-list">${reviewList.length?reviewList.map(renderReviewCard).join(''):'<div class="master-empty">Пока нет отзывов</div>'}</section></div>`;
  document.body.appendChild(ov);ov.querySelector('.edit-close').onclick=()=>ov.remove();
 }
 
@@ -887,7 +886,8 @@ function renderProfile(){
  const root=document.getElementById('masterRoot'),p=profile(),data=services();
  const gallery=(p.works&&p.works.length?p.works:DEFAULT_PROFILE.works);
  const cover=p.cover||gallery[0]||p.avatar;
- const reviews=64;
+ const reviewList=masterReviewList();
+ const reviews=Number(p.reviewsCount||0);
 
  root.innerHTML=`<div class="profile-screen master-exact-profile">
    <header class="profile-screen-head">
@@ -908,7 +908,8 @@ function renderProfile(){
      <div class="profile-summary-main">
        <h1>${p.name}</h1>
        <p>${p.area ? `Район: ${p.area}` : 'Район не указан'}</p>
-       <div class="profile-rating"><span>★ ${p.rating}</span><button class="reviews-link" onclick="showAllReviews()">${reviews} отзывов</button></div>
+       <div class="profile-rating"><span>${reviews?`★ ${Number(p.rating||0).toFixed(1)} (${reviews})`:'Нет отзывов'}</span><button class="reviews-link" onclick="showAllReviews()">${reviews} отзывов</button></div>
+       <button class="master-publish-btn ${p.is_published?'is-published':''}" type="button" onclick="toggleMasterPublish()">${p.is_published?'✓ Профиль опубликован':'Опубликовать профиль'}</button>
      </div>
    </section>
 
@@ -939,8 +940,8 @@ function renderProfile(){
 
      <section id="mp-reviews" class="profile-pane profile-section">
        <div class="inline-profile-head"><h2>Отзывы</h2><button class="text-btn" onclick="showAllReviews()">Все отзывы</button></div>
-       <div class="reviews-score"><strong>${p.rating}</strong><div>★★★★★</div><span>${reviews} отзывов</span></div>
-       ${MASTER_REVIEWS.filter(r=>r.verified).slice(0,2).map(renderReviewCard).join('')}
+       ${reviews?`<div class="reviews-score"><strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${reviews} отзывов</span></div>`:'<div class="master-empty">Пока нет подтверждённых отзывов</div>'}
+       ${reviewList.slice(0,2).map(renderReviewCard).join('')||'<div class="master-empty">Пока нет отзывов</div>'}
        <button class="show-all-reviews" onclick="showAllReviews()">Показать все отзывы</button>
        <p class="master-review-note">Отзывы мастером не редактируются.</p>
      </section>
@@ -1202,4 +1203,19 @@ document.addEventListener('click',e=>{
       };
     },80);
   }
+});
+
+window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await PNBackendSync.hydrateMasterCache();const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e)}});
+window.addEventListener('DOMContentLoaded',()=>{
+ if(window.PNRealtime)PNRealtime.watchMaster(async()=>{
+  try{
+   await PNBackendSync?.hydrateMasterCache?.();
+   const f=location.pathname.split('/').pop();
+   if(f==='master.html')renderDashboard();
+   else if(f==='master-profile.html')renderProfile();
+   else if(f==='master-bookings.html')renderBookings();
+   else if(f==='master-chats.html')renderChats();
+   else if(f==='master-analytics.html')renderAnalytics();
+  }catch(e){}
+ });
 });

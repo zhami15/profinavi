@@ -13,15 +13,18 @@
   <meta name="apple-mobile-web-app-title" content="ProfiNavi" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-</head>
+<link rel="apple-touch-icon" href="icon-192.png"></head>
 <body class="profile-page-body">
   <div id="profileContent" class="standalone-profile"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="profile.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0"></script>
+<script src="supabase-client.js"></script><script src="pn-data.js"></script><script src="pn-ranking.js"></script>
+<script src="profile.js"></script>
 <script src="pn-map.js"></script>
 <section class="profile-section" id="addressMapSection" style="padding:0 16px 24px">
   <h3 style="margin:12px 0">Адрес на карте</h3>
   <div id="masterAddressMap" style="height:240px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>
 </section>
-</body>
+<script src="pn-i18n.js"></script>
+<script src="pn-pwa.js"></script></body>
 </html>

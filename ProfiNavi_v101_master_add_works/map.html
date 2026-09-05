@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="ProfiNavi" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-</head>
+<link rel="apple-touch-icon" href="icon-192.png"></head>
 <body class="map-page-body fullscreen-search-body">
   <main class="fullscreen-search-map">
     <div id="fullMap" class="full-map fullscreen-map" aria-label="Карта мастеров ProfiNavi"></div>
@@ -55,7 +55,10 @@
       <button id="applyCurrentFilter" class="filter-apply" type="button">Показать мастеров</button>
     </div>
   </section>
-  <script src="map.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0"></script>
+<script src="supabase-client.js"></script><script src="pn-data.js"></script><script src="pn-ranking.js"></script>
+<script src="map.js"></script>
 <script src="pn-map.js"></script>
-</body>
+<script src="pn-i18n.js"></script>
+<script src="pn-pwa.js"></script></body>
 </html>

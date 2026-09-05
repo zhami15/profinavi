@@ -1,22 +1,6 @@
-const masters=[
- {name:'Tunuk Nails',cat:'nails',district:'Vefa Center · Байтик Баатыра 98',walk:'на месте',price:'1400 сом',rating:'4.9',experience:'Опыт 5 лет',saves:142,emoji:'💅',avatar:'assets/tunuk-new.png',desc:'Аккуратное покрытие, френч и нежные дизайны. Подходит тем, кто любит clean girl nails.',ig:'tunuk_nails',lat:42.857255,lng:74.609848,
-  gallery:['assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg'],
-  services:[{name:'Френч с дизайном',desc:'Нежный френч с цветами',price:'1500 сом',time:'2 ч.'},{name:'Омбре',desc:'Плавный переход цветов',price:'1300 сом',time:'2 ч.'},{name:'Наращивание',desc:'Классическое наращивание',price:'1700 сом',time:'2,5 ч.'},{name:'Маникюр + покрытие',desc:'Покрытие в один тон',price:'900 сом',time:'1,5 ч.'},{name:'Дизайн ногтей',desc:'Дизайн на выбор',price:'1200 сом',time:'1,5 ч.'}]},
- {name:'Adel Beauty',cat:'nails',district:'Нижний Джал',walk:'на месте',price:'1200 сом',rating:'4.8',experience:'Опыт 4 года',saves:96,emoji:'🎀',avatar:'assets/adel-new.png',desc:'Маникюр, укрепление и дизайны на каждый день. Мягкий розовый стиль и аккуратная форма.',ig:'adel_nails',lat:42.842427,lng:74.566250,
-  gallery:['assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png','assets/nails-reference.jpeg','assets/nails-demo.png'],
-  services:[{name:'Маникюр',desc:'Обработка и покрытие',price:'1200 сом',time:'1,5 ч.'},{name:'Укрепление',desc:'Укрепление гелем',price:'1500 сом',time:'2 ч.'},{name:'Френч',desc:'Классический френч',price:'1400 сом',time:'2 ч.'},{name:'Дизайн',desc:'Дизайн на выбор',price:'1600 сом',time:'2 ч.'},{name:'Снятие + маникюр',desc:'Полный комплекс',price:'1300 сом',time:'2 ч.'}]},
- {name:'Alya Lashes',cat:'lashes',district:'5 микрорайон, дом 2',walk:'на месте',price:'1000 сом',rating:'4.7',experience:'Опыт 6 лет',saves:83,emoji:'👁️',avatar:'assets/alya-new.png',desc:'Наращивание ресниц: натуральный эффект, лисий эффект, мокрый эффект.',ig:'alya_lashes',lat:42.873765,lng:74.636127},
- {name:'Mira Brows',cat:'brows',district:'Asia Mall · Ч. Айтматова 3',walk:'на месте',price:'700 сом',rating:'4.9',experience:'Опыт 3 года',saves:74,emoji:'🤎',avatar:'assets/mira-new.png',desc:'Коррекция, окрашивание и долговременная укладка бровей.',ig:'mira_brows',lat:42.855421,lng:74.586573},
- {name:'Nursaule Nails',cat:'nails',district:'Asia Mall',walk:'на месте',price:'900 сом',rating:'4.8',experience:'Опыт 4 года',saves:68,emoji:'💅',avatar:'assets/nursaule-new.png',desc:'Маникюр и длинный овал. Аккуратные формы и современные дизайны.',ig:'nursaule_nails',lat:42.85575,lng:74.58710,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр + покрытие',desc:'Однотонное покрытие',price:'900 сом',time:'1,5 ч.'}]},
- {name:'Diana Nail Art',cat:'nails',district:'Токтоналиева 52 · Политех',walk:'на месте',price:'1500 сом',rating:'4.9',experience:'Опыт 5 лет',saves:121,emoji:'🎨',avatar:'assets/diana-new.png',desc:'Ручная роспись и сложные дизайны ногтей.',ig:'diana_nail_art',lat:42.84975,lng:74.57865,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр со сложным дизайном',desc:'Ручная роспись',price:'1500 сом',time:'2,5 ч.'}]},
- {name:'Valeria Nails',cat:'nails',district:'Аламедин Grand · Курманджан Датка 226',walk:'на месте',price:'1000 сом',rating:'4.8',experience:'Опыт 5 лет',saves:89,emoji:'🤍',avatar:'assets/valeria-new.png',desc:'Френч и аккуратный повседневный маникюр.',ig:'valeria_nails',lat:42.88535,lng:74.63740,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Френч',desc:'Классический или цветной',price:'1000 сом',time:'2 ч.'}]},
- {name:'Marina Nails',cat:'nails',district:'Район Карла Маркса',walk:'на месте',price:'1000 сом',rating:'4.9',experience:'Опыт 8 лет',saves:103,emoji:'✨',avatar:'assets/marina-new.png',desc:'Маникюр и покрытие с вниманием к деталям.',ig:'marina_nails',lat:42.87480,lng:74.63080,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр + покрытие',desc:'Полный комплекс',price:'1000 сом',time:'1,5 ч.'}]},
- {name:'Nina Nails',cat:'nails',district:'5 микрорайон, дом 2 · салон «Алия»',walk:'на месте',price:'1000 сом',rating:'4.9',experience:'Опыт 11 лет',saves:156,emoji:'🌸',avatar:'assets/nina-new.png',desc:'Качественный и аккуратный маникюр с большим опытом работы.',ig:'nina_nails',lat:42.87370,lng:74.63605,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр',desc:'Обработка и однотонное покрытие',price:'1000 сом',time:'1,5 ч.'}]},
- {name:'Nellinails Studio',cat:'nails',district:'Куйбышева 93 · ЦУМ / Дордой Плаза',walk:'на месте',price:'1000 сом',rating:'4.8',experience:'Студия маникюра',saves:134,emoji:'💗',avatar:'assets/nellinails-new.png',desc:'Маникюр, педикюр и услуга в 4 руки за 1 час 30 минут.',ig:'nellinails_studio',lat:42.87725,lng:74.61475,gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр однотонный',desc:'Однотонное покрытие',price:'1000 сом',time:'1,5 ч.'},{name:'Педикюр однотонный',desc:'Педикюр с покрытием',price:'1200 сом',time:'1,5 ч.'}]},
- {name:'Bogdan Nails',cat:'nails',district:'Бишкек · принимает на дому',walk:'на месте',price:'1700 сом',rating:'4.7',experience:'Индивидуальная запись',saves:61,emoji:'🖤',avatar:'assets/bogdan-new.png',desc:'Фиксированная стоимость с ремонтом, дизайном и массажем рук.',ig:'bogdan_nails',lat:42.86650,lng:74.59830,gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Маникюр полный комплекс',desc:'Ремонт, дизайн и массаж рук включены',price:'1700 сом',time:'3 ч.'}]}
-];
-const masterWorkSets = [['assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg'], ['assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg'], ['assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg'], ['assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg'], ['assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg'], ['assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg'], ['assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg'], ['assets/work-08.jpg', 'assets/work-09.jpg', 'assets/work-10.jpg', 'assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg'], ['assets/work-11.jpg', 'assets/work-12.jpg', 'assets/work-13.jpg', 'assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg'], ['assets/work-14.jpg', 'assets/work-01.jpg', 'assets/work-02.jpg', 'assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg'], ['assets/work-03.jpg', 'assets/work-04.jpg', 'assets/work-05.jpg', 'assets/work-06.jpg', 'assets/work-07.jpg', 'assets/work-08.jpg']];
-masters.forEach((m,i)=>{m.gallery=masterWorkSets[i]||masterWorkSets[0];});
+const masters=window.PNCloneMasters();
+window.masters=masters;
+const masterWorkSets=window.PN_MASTER_WORK_SETS.map(x=>[...x]);
 try{
  const cp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'null');
  if(cp){
@@ -54,16 +38,12 @@ function serviceOfferMarkup(offer){
 
 
 
-const CLIENT_MASTER_REVIEWS=[
- {name:'Алина',rating:5,service:'Маникюр + покрытие',text:'Очень аккуратная работа, всё понравилось. Обязательно вернусь.',date:'12 августа',photos:['assets/work-01.jpg','assets/work-02.jpg']},
- {name:'Мээрим',rating:5,service:'Френч с дизайном',text:'Красиво, чисто и удобно. Результат полностью совпал с ожиданиями.',date:'9 августа',photos:['assets/work-03.jpg']},
- {name:'Айжан',rating:5,service:'Дизайн ногтей',text:'Мастер внимательно выслушала пожелания и сделала именно тот дизайн, который я хотела.',date:'4 августа',photos:['assets/work-04.jpg','assets/work-05.jpg','assets/work-06.jpg']},
- {name:'Диана',rating:5,service:'Маникюр + покрытие',text:'Очень приятная атмосфера и аккуратный маникюр. Носка отличная.',date:'29 июля',photos:[]},
- {name:'Алина К.',rating:4,service:'Омбре',text:'Всё понравилось, особенно форма и обработка.',date:'22 июля',photos:[]},
- {name:'Жибек',rating:5,service:'Наращивание',text:'Записалась впервые и осталась довольна. Приду ещё.',date:'15 июля',photos:['assets/work-07.jpg']}
-];
+const CLIENT_MASTER_REVIEWS=[];
+
 
 function getClientEditableProfile(index){
+ const m=masters[index];
+ if(m?._backend)return {user_id:m.user_id,name:m.name,profileName:m.name,area:m.area,address:m.address,experience:m.experience,about:m.about||m.desc,avatar:m.avatar,cover:m.cover,strengths:m.strengths||[],payment:m.payment,locationInfo:m.locationInfo,scheduleType:m.scheduleType,workDays:m.workDays||[],openTime:m.openTime,closeTime:m.closeTime,lat:m.lat,lng:m.lng,rating:m.rating,reviewsCount:m.reviewsCount};
  if(index!==0) return {};
  try{return JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')||{}}catch(e){return {}}
 }
@@ -100,17 +80,20 @@ function clientReviewCard(r){
  </article>`;
 }
 function allClientReviews(index){
- let saved=[];
- try{saved=JSON.parse(localStorage.getItem('pn_verified_reviews')||'[]').filter(r=>r.verified && Number(r.masterId||0)===Number(index))}catch(e){}
- return [...saved,...CLIENT_MASTER_REVIEWS];
+ const m=masters[index];
+ if(m?._backend || getClientEditableProfile(index).user_id){
+  try{const rows=JSON.parse(localStorage.getItem(`pn_public_reviews_${index}`)||'[]');return Array.isArray(rows)?rows.map(r=>({...r,name:r.name||'Клиент ProfiNavi'})):[]}catch(e){return []}
+ }
+ try{return JSON.parse(localStorage.getItem('pn_verified_reviews')||'[]').filter(r=>r.verified && Number(r.masterId||0)===Number(index))}catch(e){return []}
 }
 function showClientAllReviews(){
  const m=masters[masterIndex], p=getClientEditableProfile(masterIndex), list=allClientReviews(masterIndex);
- const rating=p.rating||m.rating;
+ const rating=Number(p.rating??m.rating??0);
+ const reviewsCount=Number(p.reviewsCount??m.reviewsCount??0);
  const ov=document.createElement('div');ov.className='master-edit-profile-overlay';
  ov.innerHTML=`<div class="master-edit-profile-screen reviews-full-screen">
    <header class="edit-profile-head"><button class="edit-close" type="button">‹ Назад</button><b>Отзывы</b><span></span></header>
-   <section class="reviews-full-summary"><strong>${rating}</strong><div>★★★★★</div><span>${list.length} отзывов</span></section>
+   <section class="reviews-full-summary">${list.length?`<strong>${rating.toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${Number(m.reviewsCount||list.length)} отзывов</span>`:'<strong>—</strong><span>Пока нет отзывов</span>'}</section>
    <section class="reviews-full-list">${list.map(clientReviewCard).join('')}</section>
  </div>`;
  document.body.appendChild(ov);ov.querySelector('.edit-close').onclick=()=>ov.remove();
@@ -145,7 +128,7 @@ const params=new URLSearchParams(location.search);
 let masterIndex=Number(params.get('id')||0);
 const requestedServiceIndex=Number(params.get('service'));
 const hasRequestedService=Number.isInteger(requestedServiceIndex)&&requestedServiceIndex>=0;
-if(!Number.isInteger(masterIndex)||!masters[masterIndex]) masterIndex=0;
+if(!Number.isInteger(masterIndex)||masterIndex<0) masterIndex=0;
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
 const setFavs=v=>localStorage.setItem('pn_favs',JSON.stringify(v));
 function profileGallery(m){
@@ -174,6 +157,7 @@ function showBooking(service){
 }
 function renderProfile(){
  const m=masters[masterIndex];
+ if(!m){document.getElementById('profileContent').innerHTML='<div class="master-empty" style="padding:48px 20px;text-align:center">Загружаем профиль…</div>';return;}
  const fav=getFavs().includes(masterIndex);
  const p=getClientEditableProfile(masterIndex);
  const data=getClientEditableServices(masterIndex) || m.services || [{name:'Основная услуга',price:parseInt(String(m.price||'').replace(/\D/g,''),10)||0,time:'1,5 ч.'}];
@@ -182,13 +166,15 @@ function renderProfile(){
  const avatar=p.avatar||m.avatar;
  const name=p.name||m.name;
  const area=p.area || String(m.district||'').split('·')[0].trim();
- const rating=p.rating||m.rating;
+ const rating=Number(p.rating??m.rating??0);
+ const reviewsCount=Number(p.reviewsCount??m.reviewsCount??0);
  const about=p.about||m.desc||'';
  const strengths=(p.strengths&&p.strengths.length?p.strengths:['Аккуратность','Современный дизайн','Консультация']);
  const payment=p.payment||'Наличными и переводом';
  const address=p.address||m.district||'Бишкек';
  const reviewsList=allClientReviews(masterIndex);
- const reviews=Math.max(reviewsList.length,12);
+ const reviews=reviewsCount;
+ const ratingView=window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml({...m,rating,reviewsCount:reviews}):(reviews?`★ ${rating.toFixed(1)}`:'Нет отзывов');
 
  document.title=`${name} — ProfiNavi`;
  document.getElementById('profileContent').innerHTML=`
@@ -206,7 +192,7 @@ function renderProfile(){
     <div class="profile-summary-main">
       <h1>${name}</h1>
       <p>${area?`Район: ${area}`:'Район не указан'}</p>
-      <div class="profile-rating"><span>★ ${rating}</span><button class="reviews-link" onclick="showClientAllReviews()">${reviews} отзывов</button></div>
+      <div class="profile-rating"><span>${ratingView}</span><button class="reviews-link" onclick="showClientAllReviews()">${reviews} отзывов</button></div>
     </div>
     <div class="profile-save-count"><button class="profile-big-heart ${fav?'saved':''}" onclick="toggleFav()">${fav?'♥':'♡'}</button><small>${m.saves+(fav?1:0)}<br>сохранений</small></div>
    </section>
@@ -238,9 +224,7 @@ function renderProfile(){
 
     <section id="reviews" class="profile-pane profile-section" data-pane="reviews">
       <div class="inline-profile-head"><h2>Отзывы</h2><button class="text-btn" onclick="showClientAllReviews()">Все отзывы</button></div>
-      <div class="reviews-score"><strong>${rating}</strong><div>★★★★★</div><span>${reviews} отзывов</span></div>
-      ${reviewsList.slice(0,2).map(clientReviewCard).join('')}
-      <button class="show-all-reviews" onclick="showClientAllReviews()">Показать все отзывы</button>
+      ${reviews?`<div class="reviews-score"><strong>${rating.toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${reviews} отзывов</span></div>${reviewsList.slice(0,2).map(clientReviewCard).join('')}<button class="show-all-reviews" onclick="showClientAllReviews()">Показать все отзывы</button>`:'<div class="master-empty">Пока нет подтверждённых отзывов</div>'}
     </section>
 
     <section id="salon" class="profile-pane profile-section" data-pane="salon">
@@ -330,3 +314,14 @@ async function pnRenderProfileAddressMap(){
 }
 window.addEventListener('load',()=>setTimeout(pnRenderProfileAddressMap,150));
 window.addEventListener('pageshow',()=>setTimeout(pnRenderProfileAddressMap,150));
+
+async function pnHydratePublicProfile(){
+ try{
+  const id=Number(new URLSearchParams(location.search).get('id')||0);
+  const b=await window.PNBackendSync?.hydratePublicMasterCache?.(id);
+  if(b&&window.PNRanking?.fromBundle){const dynamic=window.PNRanking.fromBundle(b.profile,b.services,b.works,[]);if(dynamic){masters[id]=dynamic;try{localStorage.setItem(`pn_dynamic_master_${id}`,JSON.stringify(dynamic))}catch(e){}}}
+  if(id===0&&b){const cp=getClientEditableProfile(0);if(cp.name)masters[0].name=cp.name;if(cp.avatar)masters[0].avatar=cp.avatar;if(cp.area||cp.address)masters[0].district=[cp.area,cp.address].filter(Boolean).join(' · ');if(Number.isFinite(Number(cp.lat)))masters[0].lat=Number(cp.lat);if(Number.isFinite(Number(cp.lng)))masters[0].lng=Number(cp.lng);if(cp.rating)masters[0].rating=cp.rating;if(Array.isArray(cp.works)&&cp.works.length)masters[0].gallery=cp.works;}
+  renderProfile();
+ }catch(e){console.warn('public profile sync',e);renderProfile()}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydratePublicProfile,100));

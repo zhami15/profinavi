@@ -1,13 +1,28 @@
 const q=new URLSearchParams(location.search);
 const master=q.get('master')||'0', service=q.get('service')||'Услуга', time=q.get('time')||'', date=new Date(q.get('date')||Date.now());
-const names=['Tunuk Nails','Adel Beauty','Alya Lashes','Mira Brows'];
+const baseMasters=window.PNCloneMasters();
+const names=baseMasters.map(x=>x.name);
+try{const id=Number(master);const cached=JSON.parse(localStorage.getItem(`pn_dynamic_master_${id}`)||'null');if(cached)names[id]=cached.name}catch(e){}
 const dateText=date.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
 document.getElementById('confirmContent').innerHTML=`<header class="booking-head"><button class="booking-close" onclick="history.back()">‹</button><h1>Подтверждение</h1><span></span></header><section class="booking-confirm-card"><div class="confirm-icon">✓</div><h2>Проверьте запись</h2><dl><div><dt>Мастер</dt><dd>${names[Number(master)]||names[0]}</dd></div><div><dt>Услуга</dt><dd>${service}</dd></div><div><dt>Дата</dt><dd>${dateText}</dd></div><div><dt>Время</dt><dd>${time}</dd></div></dl><label>Комментарий мастеру<textarea placeholder="Например: хочу короткую форму и нежный дизайн"></textarea></label><button onclick="finishBooking()">Подтвердить запись</button></section>`;
 async function completeBooking(){
  const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
  const masterName=names[Number(master)]||names[0];
- const rawDate=q.get('date')||new Date().toISOString().slice(0,10);
- const startsAt=new Date(`${rawDate}T${time||'12:00'}:00`);
+ const rawDate=q.get('date')||new Date().toISOString();
+ const baseDate=new Date(rawDate);
+ if(Number.isNaN(baseDate.getTime())){
+   alert('Некорректная дата записи. Выберите время ещё раз.');
+   return;
+ }
+ const [hh,mm]=String(time||'12:00').split(':').map(Number);
+ const startsAt=new Date(
+   baseDate.getFullYear(),
+   baseDate.getMonth(),
+   baseDate.getDate(),
+   Number.isFinite(hh)?hh:12,
+   Number.isFinite(mm)?mm:0,
+   0,0
+ );
  let dbRow;
  try{
    if(!window.PNData)throw new Error('База данных не загрузилась');
@@ -32,11 +47,7 @@ async function completeBooking(){
  const bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');
  bookings.push(booking);
  localStorage.setItem('pn_bookings',JSON.stringify(bookings));
- const chats=JSON.parse(localStorage.getItem('pn_chats')||'{}');
- const key=String(booking.id);
- chats[key]=[{from:'client',text:`Здравствуйте! Хочу записаться на услугу 「${booking.service}」 — ${dateText} в ${booking.time}.`,ts:Date.now(),kind:'booking-request'}];
- localStorage.setItem('pn_chats',JSON.stringify(chats));
- const masterReads=JSON.parse(localStorage.getItem('pn_master_chat_read_at_v49')||'{}');delete masterReads[key];localStorage.setItem('pn_master_chat_read_at_v49',JSON.stringify(masterReads));
+ // Чат создаётся backend-триггером только после подтверждения записи мастером.
  localStorage.removeItem('pn_booking');
  alert('Заявка сохранена в ProfiNavi и отправлена мастеру.');
  location.href='client.html';
@@ -152,7 +163,7 @@ function showCodeStep(){
    try{const {error}=await window.PNAuth.verifyOtp(authMethod,authValue,code);if(error)throw error;const synced=await window.PNAuth.syncLocalUser();if(synced&&synced.name){closeAuthModal();await completeBooking();return}showNameStep(authMethod,authValue)}
    catch(e){alert('Неверный или просроченный код: '+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
  };
- sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert(window.PN_TEST_MODE?'Тестовый код: 111111':'Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
+ sheet.querySelector('.pn-auth-resend').onclick=async()=>{try{const {error}=await window.PNAuth.sendOtp(authMethod,authValue);if(error)throw error;alert(window.PN_TEST_MODE?'Тестовый режим включён.':'Новый код отправлен.')}catch(e){alert('Не удалось отправить код: '+e.message)}};
 }
 
 function showNameStep(method,value=''){

@@ -21,14 +21,14 @@ function sendNewBookingToMasterChat(booking){
  }catch(e){}
 }
 
-const masters=[
- {name:'Tunuk Nails',district:'Vefa Center',bookingDays:60,avatar:'assets/tunuk.png',gallery:['assets/nails-demo.png','assets/nails-reference.jpeg'],services:[{name:'Френч с дизайном',desc:'Нежный френч с цветами',price:'1500 сом',time:'2 ч.'},{name:'Омбре',desc:'Плавный переход цветов',price:'1300 сом',time:'2 ч.'},{name:'Наращивание',desc:'Классическое наращивание',price:'1700 сом',time:'2,5 ч.'},{name:'Маникюр + покрытие',desc:'Покрытие в один тон',price:'900 сом',time:'1,5 ч.'},{name:'Дизайн ногтей',desc:'Дизайн на выбор',price:'1200 сом',time:'1,5 ч.'}]},
- {name:'Adel Beauty',district:'Нижний Джал',bookingDays:45,avatar:'assets/adel.png',gallery:['assets/nails-reference.jpeg','assets/nails-demo.png'],services:[{name:'Маникюр',desc:'Обработка и покрытие',price:'1200 сом',time:'1,5 ч.'},{name:'Укрепление',desc:'Укрепление гелем',price:'1500 сом',time:'2 ч.'},{name:'Френч',desc:'Классический френч',price:'1400 сом',time:'2 ч.'},{name:'Дизайн',desc:'Дизайн на выбор',price:'1600 сом',time:'2 ч.'},{name:'Снятие + маникюр',desc:'Полный комплекс',price:'1300 сом',time:'2 ч.'}]},
- {name:'Alya Lashes',district:'Центр',bookingDays:31,avatar:'assets/alya.png',gallery:['assets/alya.png'],services:[{name:'Наращивание ресниц',desc:'Натуральный эффект',price:'1000 сом',time:'2 ч.'}]},
- {name:'Mira Brows',district:'Азия Молл',bookingDays:90,avatar:'assets/mira.png',gallery:['assets/mira.png'],services:[{name:'Коррекция бровей',desc:'Форма и окрашивание',price:'700 сом',time:'1 ч.'}]}
-];
+const masters=window.PNCloneMasters();
+window.masters=masters;
 const qs=new URLSearchParams(location.search);
-let masterIndex=Number(qs.get('master')||0);
+const requestedMasterIndex=Number(qs.get('master')||0);
+if(Number.isInteger(requestedMasterIndex)&&requestedMasterIndex>=0){
+ try{const cached=JSON.parse(localStorage.getItem(`pn_dynamic_master_${requestedMasterIndex}`)||'null');if(cached)masters[requestedMasterIndex]=cached}catch(e){}
+}
+let masterIndex=requestedMasterIndex;
 if(!Number.isInteger(masterIndex)||!masters[masterIndex]) masterIndex=0;
 let m=masters[masterIndex];
 
@@ -144,6 +144,10 @@ function isAvailable(date,time){
   if(isPastSlot(date,time)) return false;
   if(isBookedAlready(date,time)) return false;
 
+  if(m?._backend){
+    const day=m.slotMap?.[localDateKey(date)]||[];
+    return day.includes(time);
+  }
   if(masterIndex===0){
     try{
       const slots=JSON.parse(localStorage.getItem('pn_master_slots')||'{}');
@@ -212,3 +216,14 @@ window.addEventListener('storage',e=>{
     location.reload();
   }
 });
+
+
+async function pnRecoverDynamicBooking(){
+ if(masterIndex===requestedMasterIndex)return;
+ try{
+  if(!window.PNRanking?.hydrate)return;
+  await window.PNRanking.hydrate(masters);
+  if(masters[requestedMasterIndex])location.reload();
+ }catch(e){console.warn('booking dynamic master recovery',e)}
+}
+window.addEventListener('DOMContentLoaded',()=>setTimeout(pnRecoverDynamicBooking,50));

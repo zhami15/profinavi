@@ -29,7 +29,9 @@ async function completeBooking(){
    if(!window.PNData)throw new Error('База данных не загрузилась');
    dbRow=await window.PNData.createBooking({master:Number(master),masterName,service,serviceId:serviceId||null,startsAt:startsAt.toISOString(),price:0});
  }catch(e){
-   alert('Не удалось сохранить запись в базе: '+e.message);
+   const raw=String(e?.message||'');
+   const occupied=e?.code==='23P01'||/уже недоступно|overlap|exclusion constraint|conflicting key/i.test(raw);
+   alert(occupied?'Это время уже занято. Обновите календарь и выберите другое свободное окно.':'Не удалось сохранить запись в базе: '+raw);
    return;
  }
  const booking={

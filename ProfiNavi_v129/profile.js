@@ -40,6 +40,7 @@ function serviceOfferMarkup(offer){
 
 const CLIENT_MASTER_REVIEWS=[];
 function pnProfileEsc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
+function pnProfileCssUrl(s){return String(s??'').replace(/[\'\"\n\r()]/g,c=>'\\'+c)}
 
 
 function getClientEditableProfile(index){
@@ -102,7 +103,7 @@ function showClientAllReviews(){
 }
 function openClientWork(src){
  const ov=document.createElement('div');ov.className='review-photo-viewer';
- ov.innerHTML=`<button class="review-viewer-close" type="button">×</button><img src="${src}" alt="Работа мастера">`;
+ ov.innerHTML=`<button class="review-viewer-close" type="button">×</button><img src="${pnProfileEsc(src)}" alt="Работа мастера">`;
  document.body.appendChild(ov);ov.querySelector('.review-viewer-close').onclick=()=>ov.remove();ov.onclick=e=>{if(e.target===ov)ov.remove()};
 }
 function syncedServiceCard(s,i,m,p){
@@ -187,7 +188,7 @@ function renderProfile(){
     <button class="profile-head-fav ${fav?'saved':''}" onclick="toggleFav()" aria-label="Сохранить">${fav?'♥':'♡'}</button>
    </header>
 
-   <section class="profile-cover" style="background-image:url('${cover}')"></section>
+   <section class="profile-cover" style="background-image:url('${pnProfileCssUrl(cover)}')"></section>
 
    <section class="profile-summary-card">
     <img class="profile-main-avatar" src="${pnProfileEsc(avatar)}" alt="Фото ${pnProfileEsc(name)}">
@@ -231,7 +232,7 @@ function renderProfile(){
 
     <section id="salon" class="profile-pane profile-section" data-pane="salon">
       <div class="inline-profile-head"><h2>Адрес и информация</h2></div>
-      <div class="salon-photo" style="background-image:url('${gallery[1]||cover}')"></div>
+      <div class="salon-photo" style="background-image:url('${pnProfileCssUrl(gallery[1]||cover)}')"></div>
       <h3>${pnProfileEsc(name)}</h3>
       <div class="access-list">
         <p>◷ ${pnProfileEsc(clientWorkSchedule(p))}</p>

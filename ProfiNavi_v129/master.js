@@ -331,7 +331,7 @@ async function cancelBooking(id,noReload=false){
 }
 async function completeBookingByMaster(id,noReload=false){
  const bookings=getBookings(),b=bookings.find(x=>String(x.id)===String(id));if(!b||b.status!=='confirmed')return;
- const dt=bookingEndAt(b);if(dt&&Date.now()<dt.getTime()){alert('Завершить запись можно после начала процедуры.');return}
+ const dt=bookingEndAt(b);if(dt&&Date.now()<dt.getTime()){alert('Завершить запись можно после окончания процедуры.');return}
  try{if(b.syncedToSupabase&&window.PNData)await PNData.updateBookingStatus(id,'completed');b.status='completed';b.completedAt=new Date().toISOString();setBookings(bookings);if(!noReload)location.reload()}catch(e){alert('Не удалось завершить запись: '+e.message)}
 }
 function getSlots(){return jget(SLOT_KEY,{})||{}}
@@ -357,14 +357,17 @@ function dateKeyLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).pad
 function scheduleDays(){return Array.from({length:7},(_,i)=>{const d=new Date(masterScheduleStart);d.setDate(d.getDate()+i);return d})}
 function shiftMasterScheduleWeek(n){const today=new Date();today.setHours(0,0,0,0);const d=new Date(masterScheduleStart);d.setDate(d.getDate()+n);masterScheduleStart=d<today?today:d;renderDashboard()}
 function makeTimeSlots(start,end,step){const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number),out=[];let a=sh*60+sm,b=eh*60+em;while(a<b){out.push(`${String(Math.floor(a/60)).padStart(2,'0')}:${String(a%60).padStart(2,'0')}`);a+=Number(step)}return out}
-function dayAllowed(d,mode){const wd=d.getDay();return mode==='Ежедневно'||(mode==='Будни'&&wd>=1&&wd<=5)||(mode==='Выходные'&&(wd===0||wd===6))||(mode==='Пн–Сб'&&wd>=1&&wd<=6)}
+function pnWorkDayNumber(v){const m={'ПН':1,'ВТ':2,'СР':3,'ЧТ':4,'ПТ':5,'СБ':6,'ВС':0};const n=Number(v);return Number.isInteger(n)&&n>=0&&n<=6?n:(m[String(v||'').toUpperCase()]??null)}
+function pnWorkDayCode(v){return ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'][pnWorkDayNumber(v)]||''}
+function dayAllowed(d,mode){const wd=d.getDay(),custom=Array.isArray(masterScheduleConfig.workDays)?masterScheduleConfig.workDays.map(pnWorkDayNumber).filter(x=>x!==null):[];return mode==='Ежедневно'||(mode==='Будни'&&wd>=1&&wd<=5)||(mode==='Выходные'&&(wd===0||wd===6))||(mode==='Пн–Сб'&&wd>=1&&wd<=6)||((mode==='По выбранным дням'||mode==='Выбрать дни')&&custom.includes(wd))}
 
 function liveScheduleChange(){
  const days=document.getElementById('masterDays')?.value||'Ежедневно';
  const start=document.getElementById('masterStartTime')?.value||'10:00';
  const end=document.getElementById('masterEndTime')?.value||'19:00';
  const step=Number(document.getElementById('masterInterval')?.value||60);
- masterScheduleConfig={days,start,end,step};
+ const workDays=(days==='По выбранным дням'||days==='Выбрать дни')?(Array.isArray(masterScheduleConfig.workDays)?masterScheduleConfig.workDays:[]):[];
+ masterScheduleConfig={days,workDays,start,end,step};
  jset('pn_master_schedule_config',masterScheduleConfig);
  const slots=getSlots(),times=makeTimeSlots(start,end,step);
  scheduleDays().forEach(d=>slots[dateKeyLocal(d)]=dayAllowed(d,days)?[...times]:[]);
@@ -378,7 +381,7 @@ function saveScheduleConfig(){
  // so another device and the public profile show the actual schedule settings.
  jset('pn_master_schedule_config',masterScheduleConfig);
  const p=profile();
- saveProfile({...p,scheduleType:masterScheduleConfig.days,openTime:masterScheduleConfig.start,closeTime:masterScheduleConfig.end,scheduleStep:Number(masterScheduleConfig.step)||60});
+ saveProfile({...p,scheduleType:masterScheduleConfig.days,workDays:masterScheduleConfig.workDays||[],openTime:masterScheduleConfig.start,closeTime:masterScheduleConfig.end,scheduleStep:Number(masterScheduleConfig.step)||60});
  queueLatestSlots().catch(e=>console.warn('schedule save',e));
  showScheduleSavedPopup();
 }
@@ -427,7 +430,7 @@ function renderAvailabilityCalendar(){
  <div class="master-section-head"><div><h2>Мой график</h2><small>Изменения сразу появляются в календаре</small></div></div>
  <div class="schedule-config-grid">
   <label class="schedule-days-select"><span>Дни работы</span><select id="masterDays" onchange="liveScheduleChange()">
-   <option ${cfg.days==='Ежедневно'?'selected':''}>Ежедневно</option><option ${cfg.days==='Будни'?'selected':''}>Будни</option><option ${cfg.days==='Выходные'?'selected':''}>Выходные</option><option ${cfg.days==='Пн–Сб'?'selected':''}>Пн–Сб</option>
+   <option ${cfg.days==='Ежедневно'?'selected':''}>Ежедневно</option><option ${cfg.days==='Будни'?'selected':''}>Будни</option><option ${cfg.days==='Выходные'?'selected':''}>Выходные</option><option ${cfg.days==='Пн–Сб'?'selected':''}>Пн–Сб</option><option value="Выбрать дни" ${(cfg.days==='По выбранным дням'||cfg.days==='Выбрать дни')?'selected':''}>Выбранные дни</option>
   </select></label>
   <div class="schedule-time-row">
    <label><span>С</span><select id="masterStartTime" onchange="liveScheduleChange()">${Array.from({length:25},(_,i)=>{const h=8+Math.floor(i/2),m=i%2?'30':'00',v=`${String(h).padStart(2,'0')}:${m}`;return `<option ${v===cfg.start?'selected':''}>${v}</option>`}).join('')}</select></label>
@@ -904,7 +907,7 @@ function openAddressEditor(){
  const scheduleType=ov.querySelector('#eaScheduleType'), customDays=ov.querySelector('#customDays');
  if(scheduleType){
    scheduleType.value=p.scheduleType||'Ежедневно';
-   const saved=p.workDays||[];
+   const saved=(p.workDays||[]).map(pnWorkDayCode).filter(Boolean);
    ov.querySelectorAll('#customDays button').forEach(b=>{
      b.classList.toggle('active',saved.includes(b.dataset.day));
      b.onclick=()=>b.classList.toggle('active');

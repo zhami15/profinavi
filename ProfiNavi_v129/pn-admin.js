@@ -88,11 +88,13 @@
   async function replaceSchedule(uid,{start='10:00',end='19:00',step=60,daysAhead=30,weekdays=[0,1,2,3,4,5,6]}){
     const today=new Date();today.setHours(0,0,0,0);
     const beforeRes=await sb.from('availability_slots').select('id,starts_at,ends_at,is_available').eq('master_id',uid).gte('starts_at',today.toISOString());if(beforeRes.error)throw beforeRes.error;
-    const del=await sb.from('availability_slots').delete().eq('master_id',uid).gte('starts_at',today.toISOString());if(del.error)throw del.error;
+    // Preserve occupied slot rows. Mark future rows closed, then reopen the
+    // desired schedule with upsert; the DB guard keeps booked rows unavailable.
+    const del=await sb.from('availability_slots').update({schedule_enabled:false,is_available:false}).eq('master_id',uid).gte('starts_at',today.toISOString());if(del.error)throw del.error;
     const rows=[];const stepMin=Math.max(30,Number(step)||60),ahead=Math.min(62,Math.max(1,Number(daysAhead)||30));
     const[startH,startM]=start.split(':').map(Number),[endH,endM]=end.split(':').map(Number),s0=startH*60+startM,e0=endH*60+endM;
-    for(let i=0;i<ahead;i++){const d=new Date(today);d.setDate(today.getDate()+i);if(!weekdays.includes(d.getDay()))continue;for(let v=s0;v+stepMin<=e0;v+=stepMin){const t=`${String(Math.floor(v/60)).padStart(2,'0')}:${String(v%60).padStart(2,'0')}`;rows.push({master_id:uid,starts_at:localIso(ymd(d),t),ends_at:localIso(ymd(d),addMinutes(t,stepMin)),is_available:true})}}
-    let inserted=[];if(rows.length){const r=await sb.from('availability_slots').insert(rows).select();if(r.error)throw r.error;inserted=r.data||[]}
+    for(let i=0;i<ahead;i++){const d=new Date(today);d.setDate(today.getDate()+i);if(!weekdays.includes(d.getDay()))continue;for(let v=s0;v+stepMin<=e0;v+=stepMin){const t=`${String(Math.floor(v/60)).padStart(2,'0')}:${String(v%60).padStart(2,'0')}`;rows.push({master_id:uid,starts_at:localIso(ymd(d),t),ends_at:localIso(ymd(d),addMinutes(t,stepMin)),schedule_enabled:true,is_available:true})}}
+    let inserted=[];if(rows.length){const r=await sb.from('availability_slots').upsert(rows,{onConflict:'master_id,starts_at'}).select();if(r.error)throw r.error;inserted=r.data||[]}
     const scheduleConfig={days:'По выбранным дням',workDays:weekdays,start,end,step:stepMin};
     const up=await sb.from('master_profiles').update({schedule_config:scheduleConfig,updated_at:new Date().toISOString()}).eq('user_id',uid);if(up.error)throw up.error;
     await log(uid,'schedule_replace','availability',null,{count:(beforeRes.data||[]).length},{count:inserted.length,start,end,step:stepMin,daysAhead:ahead,weekdays});return inserted;

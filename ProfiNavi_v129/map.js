@@ -51,9 +51,9 @@ function renderSheet(){
  resetBtn.classList.toggle('hidden',!anyFilters());
  if(masterStrip){
    masterStrip.innerHTML=list.length?list.map(m=>{
-     const service=serviceLabels[m.services[0]]||'Услуга';
+     const firstService=Array.isArray(m.services)?m.services[0]:null;const service=(firstService&&typeof firstService==='object'?firstService.name:serviceLabels[firstService])||categoryLabel(m)||'Услуга';
      return `<button class="map-strip-card" type="button" data-master-id="${m.id}" aria-label="Открыть профиль ${mapEsc(m.name)}">
-       <img src="${m.avatar}" alt="">
+       <img src="${mapEsc(m.avatar)}" alt="">
        <span class="map-strip-copy">
          <span class="map-strip-name"><b>${mapEsc(m.name)}</b><em>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</em></span>
          <span class="map-strip-service"><span>${mapEsc(service)}</span><strong>${mapEsc(m.price)}</strong></span>
@@ -76,14 +76,14 @@ function showMasterCard(m){
  const distance=userLocation?` · ${label(km(userLocation.lat,userLocation.lng,m.lat,m.lng))}`:'';
  const available=m.available.includes('today')?'Свободно сегодня':m.available.includes('tomorrow')?'Свободно завтра':m.available.includes('week')?'Есть свободные окна':'Нет свободных окон';
  selectedCard.dataset.masterId=m.id;
- selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${m.avatar}" alt="${mapEsc(m.name)}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${mapEsc(m.name)} · ${mapEsc(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1)))}</b><small>${mapEsc(categoryLabel(m))} · ${mapEsc(m.district)}${mapEsc(distance)}</small><strong>${mapEsc(m.price)} · ${mapEsc(available)}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
+ selectedCard.innerHTML=`<button class="map-selected-master-close" type="button" aria-label="Закрыть">×</button><img src="${mapEsc(m.avatar)}" alt="${mapEsc(m.name)}"><div class="map-selected-master-copy" role="button" tabindex="0"><b>${mapEsc(m.name)} · ${mapEsc(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1)))}</b><small>${mapEsc(categoryLabel(m))} · ${mapEsc(m.district)}${mapEsc(distance)}</small><strong>${mapEsc(m.price)} · ${mapEsc(available)}</strong></div><button class="map-selected-master-action" type="button">Записаться</button>`;
  selectedCard.classList.remove('hidden');
  selectedCard.querySelector('.map-selected-master-close').onclick=()=>selectedCard.classList.add('hidden');
  selectedCard.querySelector('.map-selected-master-copy').onclick=()=>location.href=`profile.html?id=${m.id}`;
  selectedCard.querySelector('.map-selected-master-action').onclick=()=>location.href=`booking.html?master=${m.id}`;
 }
 function clearMarkers(){markers.forEach(x=>map.removeLayer(x));markers=[]}
-function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${m.avatar}" alt=""><span>${mapEsc(m.name)}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
+function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${mapEsc(m.avatar)}" alt=""><span>${mapEsc(m.name)}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
 function renderMarkers(){if(!map){renderSheet();return}clearMarkers();visible().forEach(m=>{const marker=L.marker([m.lat,m.lng],{icon:makeIcon(m)}).addTo(map);marker.on('click',()=>{showMasterCard(m);const card=masterStrip?.querySelector(`[data-master-id="${m.id}"]`);if(card){masterStrip.querySelectorAll('.map-strip-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');card.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}});markers.push(marker)});renderSheet();fitAll();updateTriggerLabels()}
 function fitAll(){if(!map)return;const pts=visible().map(m=>[m.lat,m.lng]);if(userLocation)pts.unshift([userLocation.lat,userLocation.lng]);if(pts.length)map.fitBounds(pts,{paddingTopLeft:[35,35],paddingBottomRight:[35,35],maxZoom:14})}
 function requestLocation(){if(!navigator.geolocation){statusEl.textContent='Мастера на карте Бишкека';return}navigator.geolocation.getCurrentPosition(p=>{userLocation={lat:p.coords.latitude,lng:p.coords.longitude};statusEl.textContent='Показываем мастеров рядом с вами';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker([userLocation.lat,userLocation.lng],{radius:9,weight:4,color:'#fff',fillColor:'#2f80ed',fillOpacity:1}).addTo(map);renderMarkers()},e=>{statusEl.textContent=e.code===1?'Мастера на карте Бишкека':'Мастера показаны на карте Бишкека';fitAll()},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}

@@ -351,7 +351,7 @@ function updateStats(){
 }
 function galleryItems(m){
  const images=m.gallery||Array.from({length:6},(_,i)=>m.avatar);
- return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb"><img src="${src}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
+ return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb"><img src="${pnEscHtml(src)}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
 }
 function serviceItems(m){
  const list=m.services||[{name:m.cat==='lashes'?'Наращивание ресниц':'Основная услуга',desc:m.desc,price:m.price,time:'1,5 ч.'}];
@@ -405,7 +405,7 @@ function serviceItems(m){
      onclick="event.stopPropagation();openServiceProfile(${mi},${originalIndex})"
      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openServiceProfile(${mi},${originalIndex})}">
      <div class="service-preview-image-wrap ${hasOwnImage?'':'no-service-image'}">
-       <img src="${image}" alt="${hasOwnImage?pnEscHtml(x.name):'Нет фото'}">
+       <img src="${pnEscHtml(image)}" alt="${hasOwnImage?pnEscHtml(x.name):'Нет фото'}">
        ${oldPrice!==null && finalPrice<oldPrice && discount?`<span class="service-image-discount">-${discount}%</span>`:''}
      </div>
 
@@ -441,7 +441,7 @@ function render(){
  document.getElementById('countText').textContent=`Найдено: ${data.length}`;
  grid.innerHTML=data.length?data.map((m)=>{const i=masters.indexOf(m);return `<article class="master-card" onclick="openProfile(${i})">
   <div class="master-card-head">
-   <div class="master-identity"><img class="master-avatar" src="${m.avatar}" alt="Фото ${pnEscHtml(m.name)}"><div><div class="name">${pnEscHtml(m.name)}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${pnEscHtml(m.area||'не указан')}</span></div></div></div>
+   <div class="master-identity"><img class="master-avatar" src="${pnEscHtml(m.avatar)}" alt="Фото ${pnEscHtml(m.name)}"><div><div class="name">${pnEscHtml(m.name)}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${pnEscHtml(m.area||'не указан')}</span></div></div></div>
    <div class="save-wrap"><button class="fav-card" aria-label="Сохранить мастера" onclick="event.stopPropagation();toggleFav(${i})">${favs.includes(i)?'♥':'♡'}</button><small>${m.saves+(favs.includes(i)?1:0)} сохранений</small></div>
   </div>
   <div class="works-carousel">${galleryItems(m)}</div>
@@ -550,7 +550,7 @@ function renderUpcomingBooking(){
   const chatAction=confirmed?`<a class="primary" href="chat.html?master=${b.master}&booking=${encodeURIComponent(id)}">${expired?'Посмотреть переписку':'Написать мастеру'}</a>`:'';
   const canCancel=!cancelled&&!['completed','done'].includes(b.status)&&bookingDateTime(b)&&bookingDateTime(b).getTime()>Date.now();
   const cancelAction=canCancel?`<button class="light" type="button" onclick="pnCancelClientBooking('${id}')">Отменить запись</button>`:'';
-  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${m.avatar}" alt="${pnEscHtml(m.name)}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${pnEscHtml(m.name)}</button><p><b>${pnEscHtml(b.dateText||'')} · ${pnEscHtml(b.time||'')}</b></p><p>${pnEscHtml(b.service||'Услуга')}</p></div></div>${chatAction||cancelAction?`<div class="booking-home-actions">${chatAction}${cancelAction}</div>`:''}<p class="booking-home-note">${cancelled?'Запись отменена. Выберите другое свободное время.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Ожидаем подтверждения мастера. Чат откроется после подтверждения записи.'}</p></article>`
+  return `<article class="booking-home-card booking-list-item"><span class="booking-status ${statusClass}">${statusText}</span><div class="booking-home-main"><img class="booking-home-avatar" src="${pnEscHtml(m.avatar)}" alt="${pnEscHtml(m.name)}"><div class="booking-home-info"><button class="booking-master-link" onclick="openProfile(${b.master})">${pnEscHtml(m.name)}</button><p><b>${pnEscHtml(b.dateText||'')} · ${pnEscHtml(b.time||'')}</b></p><p>${pnEscHtml(b.service||'Услуга')}</p></div></div>${chatAction||cancelAction?`<div class="booking-home-actions">${chatAction}${cancelAction}</div>`:''}<p class="booking-home-note">${cancelled?'Запись отменена. Выберите другое свободное время.':expired?'Прошло более 72 часов после записи. Чат закрыт для новых сообщений.':confirmed?'Запись подтверждена. Чат доступен в течение 72 часов после записи.':'Ожидаем подтверждения мастера. Чат откроется после подтверждения записи.'}</p></article>`
  }).join('')}</div>`;
 }
 
@@ -579,7 +579,7 @@ const snapIdeas=[];
 function renderSnap(filter='all'){
  const box=document.getElementById('snapGrid'); if(!box)return;
  const data=masters.filter(Boolean).flatMap(m=>(m.gallery||[]).filter(src=>src&&src!=='assets/service-placeholder.svg').map((photo,j)=>({master:m.id,cat:m.cat,title:(m.services?.length?m.services[j%m.services.length]?.name:'Работа мастера')||'Работа мастера',photo}))).filter(x=>filter==='all'||x.cat===filter);
- box.innerHTML=data.length?data.map((x,idx)=>{const m=masters[x.master];return `<div class="snap-item ${idx%3===0?'tall':''}" onclick="openProfile(${x.master})"><img src="${x.photo}" alt="Работа ${m.name}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"><div class="snap-caption"><b>${x.title}</b><span>${m.name} · ${m.district}</span></div></div>`}).join(''):`<div class="favorites-empty" style="grid-column:1/-1"><b>✦</b><h3>Пока нет работ</h3><p>Работы опубликованных мастеров появятся здесь.</p></div>`;
+ box.innerHTML=data.length?data.map((x,idx)=>{const m=masters[x.master];if(!m)return'';return `<div class="snap-item ${idx%3===0?'tall':''}" onclick="openProfile(${x.master})"><img src="${pnEscHtml(x.photo)}" alt="Работа ${pnEscHtml(m.name)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"><div class="snap-caption"><b>${pnEscHtml(x.title)}</b><span>${pnEscHtml(m.name)} · ${pnEscHtml(m.district||'')}</span></div></div>`}).join(''):`<div class="favorites-empty" style="grid-column:1/-1"><b>✦</b><h3>Пока нет работ</h3><p>Работы опубликованных мастеров появятся здесь.</p></div>`;
 }
 document.querySelectorAll('[data-snap-filter]').forEach(btn=>btn.addEventListener('click',()=>{
  document.querySelectorAll('[data-snap-filter]').forEach(b=>b.classList.remove('active'));
@@ -593,7 +593,7 @@ function renderFavorites(tab='masters'){
  document.querySelectorAll('[data-favorite-tab]').forEach(b=>b.classList.toggle('active',b.dataset.favoriteTab===tab));
  if(tab==='masters'){
   const ids=getFavs();
-  box.innerHTML=ids.length?`<div class="favorite-masters-list">${ids.map(i=>{const m=masters[i];if(!m)return'';return `<article class="favorite-master" onclick="openProfile(${i})"><img src="${m.avatar}" alt="${m.name}"><div><h3>${m.name}</h3><p>★ ${m.rating} · ${m.experience}</p><span>⌖ ${m.district}</span></div><button onclick="event.stopPropagation();toggleFav(${i})" aria-label="Удалить из избранного">♥</button></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых мастеров</h3><p>Нажмите сердечко на карточке мастера.</p></div>`;
+  box.innerHTML=ids.length?`<div class="favorite-masters-list">${ids.map(i=>{const m=masters[i];if(!m)return'';return `<article class="favorite-master" onclick="openProfile(${i})"><img src="${pnEscHtml(m.avatar)}" alt="${pnEscHtml(m.name)}"><div><h3>${pnEscHtml(m.name)}</h3><p>${pnEscHtml(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+m.rating))}${m.experience?' · '+pnEscHtml(m.experience):''}</p><span>⌖ ${pnEscHtml(m.district||'')}</span></div><button onclick="event.stopPropagation();toggleFav(${i})" aria-label="Удалить из избранного">♥</button></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых мастеров</h3><p>Нажмите сердечко на карточке мастера.</p></div>`;
  }else{
   const keys=getFavWorks();
   box.innerHTML=keys.length?`<div class="favorite-works-grid">${keys.map(key=>{if(key.startsWith('snap:')){const x=snapIdeas[Number(key.split(':')[1])];if(!x)return'';const m=masters[x.master];return `<article class="favorite-work snap-saved" onclick="openProfile(${x.master})"><button onclick="event.stopPropagation();toggleWorkFav('${key}')">♥</button><div class="saved-work-emoji">${x.emoji}</div><div><b>${x.title}</b><span>${m.name}</span></div></article>`}const [mi,gi]=key.split(':').map(Number);const m=masters[mi];const src=m?.gallery?.[gi]||m?.avatar;if(!m)return'';return `<article class="favorite-work" onclick="openProfile(${mi})"><img src="${src}" alt="Работа ${m.name}"><button onclick="event.stopPropagation();toggleWorkFav('${key}')">♥</button><div><b>${m.name}</b><span>Открыть профиль</span></div></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых работ</h3><p>Нажмите сердечко на фото или дважды коснитесь работы в Работы.</p></div>`;
@@ -624,7 +624,7 @@ function loadLeafletHome(){
 function homeMasterIcon(m){
  return L.divIcon({
   className:'pn-leaflet-marker',
-  html:`<button class="map-master-marker" type="button" aria-label="Открыть профиль ${m.name}"><img src="${m.avatar}" alt=""><span>${m.name}</span></button>`,
+  html:`<button class="map-master-marker" type="button" aria-label="Открыть профиль ${pnEscHtml(m.name)}"><img src="${pnEscHtml(m.avatar)}" alt=""><span>${pnEscHtml(m.name)}</span></button>`,
   iconSize:[56,68],iconAnchor:[28,58]
  });
 }
@@ -803,8 +803,10 @@ function pnHasReview(bookingId){
 function pnBookingFinished(b){
  if(!b || b.status==='cancelled') return false;
  if(b.status==='completed'||b.status==='done') return true;
- const dt=bookingDateTime(b);
- return b.status==='confirmed' && dt && Date.now()>=dt.getTime();
+ const start=bookingDateTime(b);if(!start||b.status!=='confirmed')return false;
+ const explicitEnd=new Date(b.endsAt||b.ends_at||'');
+ const end=Number.isNaN(explicitEnd.getTime())?new Date(start.getTime()+Math.max(1,Number(b.durationMinutes)||60)*60000):explicitEnd;
+ return Date.now()>=end.getTime();
 }
 function pnOpenRatingPopup(booking){
  if(!booking || pnHasReview(booking.id) || document.getElementById('pnRatingOverlay')) return;
@@ -813,7 +815,7 @@ function pnOpenRatingPopup(booking){
  const ov=document.createElement('div');ov.id='pnRatingOverlay';ov.className='pn-rating-overlay';
  ov.innerHTML=`<div class="pn-rating-sheet">
    <button class="pn-rating-close" aria-label="Закрыть">×</button>
-   <div class="pn-rating-avatar"><img src="${m.avatar}" alt="${pnEscHtml(m.name)}"></div>
+   <div class="pn-rating-avatar"><img src="${pnEscHtml(m.avatar)}" alt="${pnEscHtml(m.name)}"></div>
    <h2>Как вам услуга?</h2><p class="pn-rating-sub">${pnEscHtml(m.name)} · ${pnEscHtml(booking.service||'Услуга')}</p>
    <div class="pn-rating-stars" role="radiogroup" aria-label="Оценка"><button data-rate="1">★</button><button data-rate="2">★</button><button data-rate="3">★</button><button data-rate="4">★</button><button data-rate="5">★</button></div>
    <p class="pn-rating-hint">Поставьте оценку от 1 до 5</p>

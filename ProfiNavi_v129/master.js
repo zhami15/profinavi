@@ -99,12 +99,47 @@ function services(){
  const imageByName=Object.fromEntries(DEFAULT_SERVICES.map(x=>[x.name,x.image]));
  return saved.map(s=>({...s,image:(s.image===undefined?imageByName[s.name]:s.image)}));
 }
-function saveServices(v){jset(SERVICE_KEY,v);window.PNData?.replaceMasterServices?.(v).catch(e=>console.warn('services backend',e))}
+let masterSaveQueue=Promise.resolve();
+let masterSaveError=null;
+function masterToast(text,isError=false){
+ let el=document.getElementById('pnMasterSaveToast');
+ if(!el){el=document.createElement('div');el.id='pnMasterSaveToast';el.style.cssText='position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:10050;max-width:90vw;padding:10px 14px;border-radius:14px;font:700 13px/1.35 system-ui;background:#222;color:#fff;box-shadow:0 8px 28px #0003;opacity:0;transition:.2s;pointer-events:none';document.body.appendChild(el)}
+ el.textContent=text;el.style.background=isError?'#a5214b':'#222';el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',2200);
+}
+function queueMasterSave(task){
+ const run=masterSaveQueue.then(task,task);
+ masterSaveQueue=run.then(()=>{masterSaveError=null},e=>{masterSaveError=e;console.warn('master backend save',e)});
+ return run;
+}
+async function flushMasterSaves(){await masterSaveQueue;if(masterSaveError){const e=masterSaveError;masterSaveError=null;throw e}}
+function saveServices(v){
+ jset(SERVICE_KEY,v);
+ if(!window.PNData?.replaceMasterServices)return Promise.resolve(v);
+ return queueMasterSave(async()=>{await PNData.replaceMasterServices(v);return v});
+}
 function profile(){return {...DEFAULT_PROFILE,...jget(PROFILE_KEY,{})}}
-function saveProfile(v){jset(PROFILE_KEY,v);window.PNData?.saveMasterProfile?.(v).then(()=>Array.isArray(v.works)?PNData.replaceMasterWorks(v.works):null).catch(e=>console.warn('profile backend',e))}
+function saveProfile(v){
+ jset(PROFILE_KEY,v);
+ if(!window.PNData?.saveMasterProfile)return Promise.resolve(v);
+ return queueMasterSave(async()=>{await PNData.saveMasterProfile(v);if(Array.isArray(v.works))await PNData.replaceMasterWorks(v.works);return v});
+}
 async function toggleMasterPublish(){
  const p=profile(),next=!p.is_published;
- try{if(!window.PNData)throw new Error('База данных не загрузилась');const saved=await PNData.setMasterPublished(next);jset(PROFILE_KEY,{...p,is_published:saved});renderProfile()}catch(e){alert('Не удалось изменить публикацию: '+e.message)}
+ try{
+  if(!window.PNData)throw new Error('База данных не загрузилась');
+  masterToast(next?'Сохраняем профиль перед публикацией…':'Сохраняем изменения…');
+  await flushMasterSaves();
+  if(next){
+   const current=profile();
+   await PNData.saveMasterProfile(current);
+   await PNData.replaceMasterWorks(current.works||[]);
+   await PNData.replaceMasterServices(services());
+   await PNData.replaceAvailability(jget(SLOT_KEY,{}));
+  }
+  const saved=await PNData.setMasterPublished(next);
+  const updated={...profile(),is_published:saved};jset(PROFILE_KEY,updated);renderProfile();
+  masterToast(saved?'Профиль опубликован':'Профиль снят с публикации');
+ }catch(e){alert('Не удалось изменить публикацию: '+e.message)}
 }
 function money(v){return new Intl.NumberFormat('ru-RU').format(Number(v)||0)+' сом'}
 function sameDay(a,b){const x=new Date(a),y=new Date(b);return x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate()}
@@ -146,8 +181,6 @@ function closeMasterAccount(){
  if(modal)modal.classList.add('hidden');
 }
 
-function switchToClient(){localStorage.setItem('pn_last_mode','client');location.href='client.html'}
-function switchToClient(){localStorage.setItem('pn_last_mode','client');location.href='client.html'}
 function masterHeader(title,sub=''){
  const p=profile();
  return `<header class="master-top pro-client-header">
@@ -194,7 +227,7 @@ function masterHeader(title,sub=''){
    </section>
  </div>`;
 }
-async function logoutMaster(){try{await window.PNAuth?.signOut?.()}catch(e){}localStorage.removeItem(MASTER_KEY);location.href='index.html'}
+async function logoutMaster(){try{await window.PNAuth?.signOut?.()}catch(e){}[MASTER_KEY,PROFILE_KEY,SERVICE_KEY,SLOT_KEY,'pn_master_backend_reviews','pn_master_cache_owner'].forEach(k=>localStorage.removeItem(k));location.href='index.html'}
 function updateClientUnread(){let u=jget('pn_client_chat_unread',{});u['thread_master_0_client_main']=1;jset('pn_client_chat_unread',u)}
 
 async function pnConversationForBooking(bookingId){
@@ -614,12 +647,12 @@ function masterServiceCard(s,i,p){
  </article>`;
 }
 
-function fileToDataURL(file, cb){
-  const reader = new FileReader();
-  reader.onload = () => cb(reader.result);
-  reader.readAsDataURL(file);
+function setPhotoPickerBusy(overlay,text='Загружаем фото…'){
+ const box=overlay?.querySelector('.master-photo-picker');if(!box)return;
+ box.querySelectorAll('input,button').forEach(x=>x.disabled=true);
+ let status=box.querySelector('.picker-upload-status');if(!status){status=document.createElement('div');status.className='picker-upload-status';status.style.cssText='padding:12px;text-align:center;font-weight:800;color:#ff4fa3';box.appendChild(status)}status.textContent=text;
 }
-function chooseImage(target, index){
+async function chooseImage(target,index){
   const overlay=document.createElement('div');
   overlay.className='master-photo-picker-overlay';
   overlay.innerHTML=`<div class="master-photo-picker">
@@ -632,21 +665,26 @@ function chooseImage(target, index){
   document.body.appendChild(overlay);
   overlay.querySelector('.picker-cancel').onclick=()=>overlay.remove();
   overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
-  const useFile=(file)=>{
+  const useFile=async(file)=>{
     if(!file)return;
-    fileToDataURL(file,data=>{
-      const p=profile();
-      if(target==='avatar') saveProfile({...p,avatar:data});
-      if(target==='cover') saveProfile({...p,cover:data});
-      if(target==='work'){
+    try{
+      if(!window.PNData?.uploadMasterMedia)throw new Error('Хранилище изображений не загрузилось');
+      setPhotoPickerBusy(overlay);
+      const kind=target==='work'?'work':target;
+      const url=await PNData.uploadMasterMedia(file,kind);
+      const p=profile();let next=p;
+      if(target==='avatar')next={...p,avatar:url};
+      else if(target==='cover')next={...p,cover:url};
+      else if(target==='work'){
         const works=[...(p.works||[])];
-        if(Number.isInteger(index)) works[index]=data;
-        else works.push(data);
-        saveProfile({...p,works});
+        if(Number.isInteger(index))works[index]=url;else works.push(url);
+        next={...p,works};
       }
-      overlay.remove();
-      renderProfile();
-    });
+      await saveProfile(next);
+      overlay.remove();renderProfile();masterToast('Фото сохранено');
+    }catch(e){
+      overlay.remove();alert('Не удалось загрузить фото: '+e.message);renderProfile();
+    }
   };
   overlay.querySelector('#cameraInput').onchange=e=>useFile(e.target.files?.[0]);
   overlay.querySelector('#galleryInput').onchange=e=>useFile(e.target.files?.[0]);
@@ -655,7 +693,16 @@ function chooseServiceImage(index,cb){
  const ov=document.createElement('div');ov.className='master-photo-picker-overlay';
  ov.innerHTML=`<div class="master-photo-picker"><div class="picker-handle"></div><h3>Фото услуги</h3><label class="picker-action"><span>📷</span><b>Снять фото</b><input id="sc" type="file" accept="image/*" capture="environment" hidden></label><label class="picker-action"><span>🖼</span><b>Выбрать из галереи</b><input id="sg" type="file" accept="image/*" hidden></label><button class="picker-cancel">Отмена</button></div>`;
  document.body.appendChild(ov);ov.querySelector('.picker-cancel').onclick=()=>ov.remove();
- const use=f=>{if(!f)return;fileToDataURL(f,data=>{let a=services();if(a[index]){a[index].image=data;saveServices(a)}ov.remove();cb&&cb(data)})};
+ const use=async f=>{
+  if(!f)return;
+  try{
+   if(!window.PNData?.uploadServiceMedia)throw new Error('Хранилище изображений услуг не загрузилось');
+   setPhotoPickerBusy(ov);
+   const url=await PNData.uploadServiceMedia(f);let a=services();
+   if(a[index]){a[index].image=url;await saveServices(a)}
+   ov.remove();cb&&cb(url);masterToast('Фото услуги сохранено');
+  }catch(e){ov.remove();alert('Не удалось загрузить фото услуги: '+e.message)}
+ };
  ov.querySelector('#sc').onchange=e=>use(e.target.files?.[0]);ov.querySelector('#sg').onchange=e=>use(e.target.files?.[0]);
 }
 function deleteWork(index){
@@ -738,7 +785,7 @@ function openWorkActions(i){
  const ov=document.createElement('div');ov.className='master-photo-picker-overlay';
  ov.innerHTML=`<div class="master-photo-picker"><div class="picker-handle"></div><img class="work-action-preview" src="${src}"><h3>Работа</h3><label class="work-action-btn"><b>Заменить из галереи</b><input id="replaceGallery" type="file" accept="image/*" hidden></label><label class="work-action-btn"><b>Снять новое фото</b><input id="replaceCamera" type="file" accept="image/*" capture="environment" hidden></label><button class="work-action-btn danger" id="removeWork">Удалить фото</button><button class="picker-cancel">Отмена</button></div>`;
  document.body.appendChild(ov);
- const replace=file=>{if(!file)return;fileToDataURL(file,data=>{const q=profile(),works=[...(q.works||[])];works[i]=data;saveProfile({...q,works});ov.remove();renderProfile()})};
+ const replace=async file=>{if(!file)return;try{setPhotoPickerBusy(ov,'Заменяем фото…');const url=await PNData.uploadMasterMedia(file,'work');const q=profile(),works=[...(q.works||[])];works[i]=url;await saveProfile({...q,works});ov.remove();renderProfile();masterToast('Фото заменено')}catch(e){ov.remove();alert('Не удалось заменить фото: '+e.message)}};
  ov.querySelector('#replaceGallery').onchange=e=>replace(e.target.files?.[0]);
  ov.querySelector('#replaceCamera').onchange=e=>replace(e.target.files?.[0]);
  ov.querySelector('#removeWork').onclick=()=>{ov.remove();deleteWork(i)};
@@ -1149,10 +1196,38 @@ window.addEventListener('storage',e=>{
 });
 
 
+async function pnLegacyDataUrlBlob(value){
+ const r=await fetch(value);if(!r.ok)throw new Error('Не удалось прочитать локальное изображение');return r.blob();
+}
+async function pnMigrateLegacyLocalMedia(){
+ if(!window.PNData?.uploadMasterMedia)return false;
+ let changed=false,p=profile();
+ const migrateMaster=async(value,kind)=>{
+  if(!String(value||'').startsWith('data:image/'))return value;
+  const blob=await pnLegacyDataUrlBlob(value);return PNData.uploadMasterMedia(blob,kind);
+ };
+ if(String(p.avatar||'').startsWith('data:image/')){p={...p,avatar:await migrateMaster(p.avatar,'avatar')};changed=true}
+ if(String(p.cover||'').startsWith('data:image/')){p={...p,cover:await migrateMaster(p.cover,'cover')};changed=true}
+ if(Array.isArray(p.works)&&p.works.some(x=>String(x||'').startsWith('data:image/'))){
+  const works=[];for(const x of p.works)works.push(String(x||'').startsWith('data:image/')?await migrateMaster(x,'work'):x);p={...p,works};changed=true;
+ }
+ if(changed)await saveProfile(p);
+ const list=services();let servicesChanged=false;
+ for(let i=0;i<list.length;i++){
+  if(String(list[i]?.image||'').startsWith('data:image/')){
+   if(!PNData.uploadServiceMedia)throw new Error('Хранилище изображений услуг не загрузилось');
+   const blob=await pnLegacyDataUrlBlob(list[i].image);list[i]={...list[i],image:await PNData.uploadServiceMedia(blob)};servicesChanged=true;
+  }
+ }
+ if(servicesChanged)await saveServices(list);
+ if(changed||servicesChanged){await flushMasterSaves();masterToast('Старые фото перенесены в облако')}
+ return changed||servicesChanged;
+}
+
 async function pnMasterOwnMap(){
   if(!window.PNMap)return;
-  const profile=getProfile?getProfile():null;
-  if(!profile)return;
+  const currentProfile=profile();
+  if(!currentProfile)return;
   let el=document.getElementById('pnMasterOwnMap');
   const host=document.querySelector('#profileView,.master-profile,.profile-page,main');
   if(!host)return;
@@ -1162,7 +1237,7 @@ async function pnMasterOwnMap(){
     sec.innerHTML='<h3 style="margin:0 16px 10px">Адрес на карте</h3><div id="pnMasterOwnMap" style="height:240px;margin:0 16px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>';
     host.appendChild(sec); el=sec.querySelector('#pnMasterOwnMap');
   }
-  await PNMap.render(el,profile,15);
+  await PNMap.render(el,currentProfile,15);
 }
 window.addEventListener('load',()=>setTimeout(pnMasterOwnMap,250));
 window.addEventListener('pageshow',()=>setTimeout(pnMasterOwnMap,250));
@@ -1180,7 +1255,7 @@ document.addEventListener('click',e=>{
       wrap.style.cssText='margin-top:12px';
       wrap.innerHTML='<div style="font-weight:700;margin-bottom:6px">Точка на карте</div><div style="font-size:13px;color:#777;margin-bottom:8px">Нажмите на дом или перетащите маркер.</div><button type="button" id="eaFindAddress" class="secondary" style="width:100%;margin-bottom:8px">Найти введённый адрес</button><div id="eaLocationMap" style="height:250px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>';
       address.parentElement.appendChild(wrap);
-      const p=getProfile();
+      const p=profile();
       const initial=(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))?[Number(p.lat),Number(p.lng)]:null;
       await PNMap.pick(document.getElementById('eaLocationMap'),initial,async x=>{
         const previous=pnEditPickedLocation; pnEditPickedLocation=x;
@@ -1205,7 +1280,7 @@ document.addEventListener('click',e=>{
   }
 });
 
-window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await PNBackendSync.hydrateMasterCache();const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e)}});
+window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await PNBackendSync.hydrateMasterCache();const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
 window.addEventListener('DOMContentLoaded',()=>{
  if(window.PNRealtime)PNRealtime.watchMaster(async()=>{
   try{

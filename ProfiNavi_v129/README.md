@@ -1,4 +1,4 @@
-# ProfiNavi v129
+# ProfiNavi v131
 
 Статический PWA-клиент ProfiNavi для Netlify/Vercel + Supabase backend.
 
@@ -11,7 +11,7 @@
 - Демо-запрос действует 10 минут, повторная отправка ограничена, неверные попытки считаются, успешный код одноразовый.
 - Когда появится SMS-провайдер: переключить `PN_TEST_MODE=false`. Тогда используются штатные Supabase Phone OTP `signInWithOtp({ phone })` + `verifyOtp({ phone, token, type: 'sms' })`.
 
-## Реальный рейтинг мастера — v129
+## Реальный рейтинг мастера — v131
 
 Публичный рейтинг больше не является простым средним.
 
@@ -56,7 +56,7 @@
 ## Мастера и ID
 
 - Старое ограничение `legacy_id=0` для каждого нового мастера удалено.
-- Supabase автоматически выдаёт новым мастерам уникальный постоянный `legacy_id`, начиная с `11` после текущих 11 каталожных карточек.
+- Supabase автоматически выдаёт каждому новому мастеру уникальный постоянный `legacy_id` через серверный sequence + `BEFORE INSERT` trigger. Публичный ID больше не зависит от frontend.
 - Динамические мастера загружаются в общий каталог, карту, профиль, запись, подтверждение, чаты и избранное.
 - Ручные рейтинги `4.7–4.9` и демонстрационные отзывы удалены из интерфейса.
 
@@ -84,3 +84,24 @@
 - Built-in demo masters and demo works removed.
 - Public directory is loaded only from published Supabase master_profiles.
 - First load clears legacy demo browser cache.
+
+
+## v131 — media upload + master publication hardening
+
+- Фото профиля, обложка и работы мастера загружаются в Supabase Storage bucket `master-media`; локальные `data:` preview больше не считаются сохранённым медиа.
+- При первом входе v131 пытается автоматически мигрировать оставшиеся от v129 `data:image/...` аватар/обложку/работы/фото услуг в Storage до обычной hydration.
+- Фото услуг загружаются в отдельный bucket `service-media`.
+- Путь каждого файла начинается с `auth.uid()`, поэтому существующие Storage RLS разрешают мастеру запись только в собственную папку.
+- Размер изображения проверяется во frontend: максимум 10 МБ; принимаются image MIME types, разрешённые Storage.
+- Кнопка публикации ждёт очередь сохранений и перед `is_published=true` повторно сохраняет профиль, работы, услуги и расписание.
+- Исправлена регистрационная карта: удалена двойная инициализация; стартовый центр карты больше не считается выбранной точкой.
+- Исправлен серверный public ID: создан реальный trigger `master_profiles_assign_legacy_id`; существующие строки с NULL backfill-ятся sequence ID.
+- При входе другого мастера локальный master-cache очищается и привязывается к `user_id`, чтобы данные двух кабинетов не смешивались на одном устройстве.
+- Hydration теперь явно записывает пустые services/works/slots из Supabase, чтобы удалённые на сервере данные не оставались в localStorage.
+
+
+## v131 — client auth/logout
+- Added client logout in the account modal.
+- Logout revokes the Supabase session and clears user-specific local caches (bookings, chats, reviews, favorites and auth-bound master caches) without deleting server data.
+- Client registration preserves an existing profile role instead of forcing `client`.
+- Visiting client-login while already authenticated returns to the client app unless `?force=1` is supplied.

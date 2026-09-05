@@ -1,4 +1,4 @@
-const CACHE='profinavi-v129';
+const CACHE='profinavi-v131';
 const CORE=['./','./index.html','./client.html','./style.css','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest','./pn-data.js','./pn-ranking.js','./pn-pwa.js','./pn-i18n.js'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

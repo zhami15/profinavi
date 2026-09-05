@@ -14,6 +14,24 @@ function pnPhone(contact){
 }
 function pnCachedClient(){try{return JSON.parse(localStorage.getItem('pn_client_user')||'null')}catch{return null}}
 
+function pnValidateImageFile(file,maxBytes=10*1024*1024){
+ if(!file)throw new Error('Файл не выбран');
+ if(!String(file.type||'').startsWith('image/'))throw new Error('Можно загружать только изображения');
+ if(Number(file.size||0)>maxBytes)throw new Error('Изображение слишком большое. Максимум 10 МБ');
+ return file;
+}
+async function pnUploadImage(bucket,file,kind='image'){
+ pnValidateImageFile(file);
+ const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');
+ const ext=(file.name?.split('.').pop()||file.type?.split('/').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+ const safeKind=String(kind||'image').toLowerCase().replace(/[^a-z0-9_-]/g,'-')||'image';
+ const path=`${user.id}/${safeKind}/${crypto.randomUUID()}.${ext}`;
+ const {error}=await pnSupabase.storage.from(bucket).upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type||undefined});if(error)throw error;
+ const publicUrl=pnSupabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl||null;
+ if(!publicUrl)throw new Error('Не удалось получить ссылку на изображение');
+ return publicUrl;
+}
+
 window.PNAuth={
  async currentUser(){
   if(!window.pnSupabase)return null;
@@ -69,7 +87,27 @@ window.PNAuth={
   if(user){const {data,error}=await pnSupabase.from('master_profiles').select('user_id').eq('user_id',user.id).maybeSingle();if(!error&&data)return true}
   return false;
  },
- async signOut(){await pnSupabase?.auth.signOut();localStorage.removeItem('pn_client_user')}
+ clearLocalAuthState(){
+  const exact=[
+    'pn_client_user','pn_bookings','pn_booking','pn_chats','pn_verified_reviews',
+    'pn_favs','pn_fav_works','pn_client_chat_read_at_v49','pn_client_chat_read_at',
+    'pn_client_chat_unread','pn_chat_unread','pn_master_chat_read_at_v49',
+    'pn_master_chat_read_at','pn_master_chat_unread','pn_master_chats',
+    'pn_master_backend_reviews','pn_master_cache_owner','pn_master_session',
+    'pn_master_profile_0','pn_master_services_0','pn_master_slots','pn_master_schedule_config',
+    'pn_master_feed_works'
+  ];
+  exact.forEach(k=>localStorage.removeItem(k));
+  Object.keys(localStorage).forEach(k=>{if(k.startsWith('pn_chat_'))localStorage.removeItem(k)});
+  ['pn_test_pending_phone','pn_auth_pending','pn_master_pending_phone'].forEach(k=>sessionStorage.removeItem(k));
+ },
+ async signOut(){
+  let error=null;
+  try{if(pnSupabase){const out=await pnSupabase.auth.signOut({scope:'local'});error=out?.error||null}}catch(e){error=e}
+  this.clearLocalAuthState();
+  if(error)throw error;
+  return true;
+ }
 };
 
 window.PNData={
@@ -215,11 +253,10 @@ Object.assign(window.PNData,{
   if(!rows.length)return[];const {data,error}=await pnSupabase.from('availability_slots').insert(rows).select();if(error)throw error;return data||[];
  },
  async uploadMasterMedia(file,kind='work'){
-  const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');
-  const ext=(file.name?.split('.').pop()||file.type?.split('/').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
-  const path=`${user.id}/${kind}/${crypto.randomUUID()}.${ext}`;
-  const {error}=await pnSupabase.storage.from('master-media').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type||undefined});if(error)throw error;
-  return pnSupabase.storage.from('master-media').getPublicUrl(path).data?.publicUrl||null;
+  return pnUploadImage('master-media',file,kind);
+ },
+ async uploadServiceMedia(file){
+  return pnUploadImage('service-media',file,'service');
  },
  async listMasterBookings(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('bookings').select('*').eq('master_id',user.id).order('starts_at');if(error)throw error;return data||[]},
  async listConversations(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('conversations').select('*').or(`client_id.eq.${user.id},master_id.eq.${user.id}`).order('created_at',{ascending:false});if(error)throw error;return data||[]},
@@ -233,8 +270,9 @@ window.PNBackendSync={
  async hydratePublicMasterCache(legacyId=0){
   const b=await PNData.loadPublicMasterBundle(legacyId);if(!b)return null;const p=b.profile;let c={};try{c=JSON.parse(localStorage.getItem(`pn_master_profile_${legacyId}`)||'{}')}catch(e){}
   c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};
-  if(b.works?.length)c.works=b.works.map(x=>x.image_url);localStorage.setItem(`pn_master_profile_${legacyId}`,JSON.stringify(c));
-  if(legacyId===0&&b.services)localStorage.setItem('pn_master_services_0',JSON.stringify(b.services.map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
+  c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem(`pn_master_profile_${legacyId}`,JSON.stringify(c));
+  localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
+  if(legacyId===0)localStorage.setItem('pn_master_services_0',localStorage.getItem(`pn_master_services_${legacyId}`)||'[]');
   localStorage.setItem(`pn_public_reviews_${legacyId}`,JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,rating:Number(x.rating)||0,text:x.text||'',photos:x.photos||[],date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true}))));
   return b;
  },
@@ -245,9 +283,9 @@ window.PNBackendSync={
     about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,
     payment:p.payment||c.payment,locationInfo:p.location_info||c.locationInfo,scheduleType:p.schedule_config?.days||c.scheduleType,workDays:p.schedule_config?.workDays||c.workDays,
     openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
-  if(b.services?.length)localStorage.setItem('pn_master_services_0',JSON.stringify(b.services.map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
-  if(b.works?.length){let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}c.works=b.works.map(x=>x.image_url);localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
-  if(b.slots?.length){const o={};b.slots.forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(o[k]||(o[k]=[])).push(t)});localStorage.setItem('pn_master_slots',JSON.stringify(o))}
+  localStorage.setItem('pn_master_services_0',JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',image:x.image_url||null}))));
+  {let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}
+  {const o={};(b.slots||[]).forEach(x=>{const d=new Date(x.starts_at),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,t=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;(o[k]||(o[k]=[])).push(t)});localStorage.setItem('pn_master_slots',JSON.stringify(o))}
   if(b.bookings)localStorage.setItem('pn_bookings',JSON.stringify(b.bookings.map(x=>({id:x.id,master:0,masterId:0,clientId:x.client_id,clientName:x.client_name||'Клиент',service:x.service_name||'Услуга',date:x.starts_at,time:new Date(x.starts_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status:x.status==='approved'?'confirmed':x.status==='declined'?'cancelled':x.status,syncedToSupabase:true}))));
   localStorage.setItem('pn_master_backend_reviews',JSON.stringify((b.reviews||[]).map(x=>({id:x.id,bookingId:x.booking_id,name:x.client_name||'Клиент',rating:Number(x.rating)||0,service:x.service_name||'Услуга',text:x.text||'',date:new Date(x.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}),verified:true,photos:x.photos||[]}))));
   return b;

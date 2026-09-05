@@ -40,37 +40,27 @@ function syncMasterIdentityForWorks(){
 function allFeedWorks(){
  return masters.filter(Boolean).flatMap(m=>(m.gallery||[]).filter(photo=>photo&&photo!=='assets/service-placeholder.svg').map((photo,i)=>({master:m.id,cat:m.cat||'nails',title:(m.services?.length?m.services[i%m.services.length]?.name:'Работа мастера')||'Работа мастера',service:(m.services?.length?m.services[i%m.services.length]?.name:'Работа мастера')||'Работа мастера',price:(m.services?.length?m.services[i%m.services.length]?.price:'')||'',photo,workKey:`${m.id}:${i}`})));
 }
-function fileToWorkDataURL(file){
- return new Promise((resolve,reject)=>{
-   const reader=new FileReader();
-   reader.onload=()=>resolve(reader.result);
-   reader.onerror=reject;
-   reader.readAsDataURL(file);
- });
-}
 async function addMasterWorks(files){
  if(!hasMasterAccount()||!files?.length)return;
+ if(!window.PNData?.uploadMasterMedia)return alert('Хранилище изображений не загрузилось. Обновите страницу.');
  const feed=getMasterFeedWorks();
  const profile=getMasterProfileForWorks();
  const profileWorks=Array.isArray(profile.works)?[...profile.works]:[];
-
- for(const file of [...files]){
-   if(!file.type.startsWith('image/'))continue;
-   const photo=await fileToWorkDataURL(file);
-   const id='work_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-   feed.push({
-     id,
-     photo,
-     title:'Моя работа',
-     service:'Работа мастера',
-     cat:'nails',
-     createdAt:new Date().toISOString()
-   });
-   profileWorks.unshift(photo);
- }
- saveMasterFeedWorks(feed);
- localStorage.setItem(MASTER_PROFILE_KEY,JSON.stringify({...profile,works:profileWorks}));
- renderSnap(document.querySelector('[data-filter].active')?.dataset.filter||'all');
+ try{
+  for(const file of [...files]){
+    if(!String(file.type||'').startsWith('image/'))continue;
+    const photo=await PNData.uploadMasterMedia(file,'work');
+    const id='work_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+    feed.push({id,photo,title:'Моя работа',service:'Работа мастера',cat:'nails',createdAt:new Date().toISOString()});
+    profileWorks.unshift(photo);
+  }
+  const next={...profile,works:profileWorks};
+  saveMasterFeedWorks(feed);
+  localStorage.setItem(MASTER_PROFILE_KEY,JSON.stringify(next));
+  await PNData.saveMasterProfile(next);
+  await PNData.replaceMasterWorks(profileWorks);
+  renderSnap(document.querySelector('[data-filter].active')?.dataset.filter||'all');
+ }catch(e){alert('Не удалось сохранить работу: '+e.message)}
 }
 function setupMasterWorksAdd(){
  const btn=document.getElementById('worksAddBtn');

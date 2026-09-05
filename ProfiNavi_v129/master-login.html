@@ -51,6 +51,13 @@ function bindPhone(id){
 }
 
 const $=id=>document.getElementById(id);let pending=null;
+function prepareMasterCache(userId){
+ const owner=localStorage.getItem('pn_master_cache_owner');
+ if(owner!==String(userId)){
+  ['pn_master_profile_0','pn_master_services_0','pn_master_slots','pn_master_backend_reviews','pn_master_schedule_config','pn_bookings','pn_chats','pn_master_chat_unread','pn_master_chat_read_at','pn_master_chat_read_at_v49'].forEach(k=>localStorage.removeItem(k));
+ }
+ localStorage.setItem('pn_master_cache_owner',String(userId));
+}
 function pane(id){['loginPane','registerPane','codePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
 ['loginPhone','regPhone'].forEach(bindPhone);
 $('showRegister').onclick=()=>pane('registerPane');if(location.hash==='#register')pane('registerPane');$('showLogin').onclick=()=>pane('loginPane');$('backRegister').onclick=()=>pane(pending?.mode==='register'?'registerPane':'loginPane');
@@ -69,9 +76,10 @@ async function finishMasterLogin(user){
  const {data:mp,error:mpErr}=await pnSupabase.from('master_profiles').select('user_id,profile_name,city,address,area,categories,latitude,longitude,avatar_url,cover_url,bio,experience_text,strengths_tags,payment,location_info,schedule_config,is_published,legacy_id').eq('user_id',user.id).maybeSingle();if(mpErr)throw mpErr;if(!mp)throw new Error('Для этого номера нет кабинета мастера');
  const {data:prof}=await pnSupabase.from('profiles').select('name').eq('id',user.id).maybeSingle();
  const personalName=prof?.name||user.user_metadata?.name||'Мастер';
+ prepareMasterCache(user.id);
  localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:personalName,test:!!window.PN_TEST_MODE,supabase:true}));
  let lp={};try{lp=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
- lp={...lp,name:mp.profile_name||lp.name||personalName,ownerName:personalName,profileName:mp.profile_name||lp.name||personalName,city:mp.city||'Бишкек',address:mp.address||'',area:mp.area||'',categories:mp.categories||[],lat:Number(mp.latitude)||lp.lat,lng:Number(mp.longitude)||lp.lng,is_published:!!mp.is_published,user_id:user.id};
+ lp={...lp,name:mp.profile_name||lp.name||personalName,ownerName:personalName,profileName:mp.profile_name||lp.name||personalName,city:mp.city||'Бишкек',address:mp.address||'',area:mp.area||'',categories:mp.categories||[],lat:Number(mp.latitude)||lp.lat,lng:Number(mp.longitude)||lp.lng,avatar:mp.avatar_url||lp.avatar,cover:mp.cover_url||lp.cover,about:mp.bio||lp.about,experience:mp.experience_text||lp.experience,strengths:mp.strengths_tags||lp.strengths||[],payment:mp.payment||lp.payment,locationInfo:mp.location_info||lp.locationInfo,is_published:!!mp.is_published,user_id:user.id,legacy_id:mp.legacy_id};
  localStorage.setItem('pn_master_profile_0',JSON.stringify(lp));localStorage.setItem('pn_last_mode','master');location.href='master.html';
 }
 
@@ -106,6 +114,7 @@ $('verifyBtn').onclick=async()=>{
    const {data:profileExists,error:profileCheckErr}=await pnSupabase.from('profiles').select('id').eq('id',user.id).maybeSingle();if(profileCheckErr)throw profileCheckErr;
    if(!profileExists){const {error:insErr}=await pnSupabase.from('profiles').insert({id:user.id,name:pending.name,phone:pending.phone,role:'master',city:pending.city,updated_at:new Date().toISOString()});if(insErr)throw insErr;}
    const {error:mErr}=await pnSupabase.from('master_profiles').upsert({user_id:user.id,profile_name:pending.profileName,salon_name:null,city:pending.city,address:pending.address,area:pending.area||null,categories:pending.categories,specialization:pending.categories.join(', '),latitude:pending.lat,longitude:pending.lng,is_published:false,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(mErr)throw mErr;
+   prepareMasterCache(user.id);
    localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:pending.name,test:!!window.PN_TEST_MODE,supabase:true}));localStorage.setItem('pn_last_mode','master');
    let profile={};try{profile=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
    profile={...profile,name:pending.profileName,profileName:pending.profileName,ownerName:pending.name,city:pending.city,area:pending.area||'',address:pending.address,categories:pending.categories,lat:pending.lat,lng:pending.lng,is_published:false,user_id:user.id};
@@ -113,27 +122,6 @@ $('verifyBtn').onclick=async()=>{
  }catch(e){alert((pending.mode==='register'?'Не удалось зарегистрировать мастера: ':'Не удалось войти: ')+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
 };
 </script>
-<script>
-async function initRegistrationMap(){
-  const el=$('regLocationMap'); if(!el||!window.PNMap)return;
-  await PNMap.pick(el,pickedLocation?[pickedLocation.lat,pickedLocation.lng]:null,(x)=>pickedLocation=x);
-}
-if(document.readyState==='loading'){
- document.addEventListener('DOMContentLoaded',()=>setTimeout(initRegistrationMap,100));
-}else setTimeout(initRegistrationMap,100);
-if($('findAddressBtn')) $('findAddressBtn').onclick=async()=>{
-  const address=$('regAddress').value.trim(), city=$('regCity').value;
-  if(!address)return alert('Сначала введите адрес.');
-  try{
-    const geo=await pnGeocodeAddress(address,city);
-    if(!geo?.found)return alert('Адрес автоматически не найден. Выберите точку вручную на карте.');
-    pickedLocation={lat:geo.lat,lng:geo.lng};
-    await PNMap.pick($('regLocationMap'),[geo.lat,geo.lng],(x)=>pickedLocation=x);
-  }catch(e){alert('Не удалось найти адрес автоматически. Выберите точку вручную на карте.')}
-};
-
-</script>
-
 <script>
 (function(){
  function boot(){
@@ -144,6 +132,7 @@ if($('findAddressBtn')) $('findAddressBtn').onclick=async()=>{
   const map=L.map(el).setView(center,13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
   const marker=L.marker(center,{draggable:true}).addTo(map);
+  window.pickedLocation=null;
   function save(){const x=marker.getLatLng();window.pickedLocation={lat:x.lat,lng:x.lng};}
   async function moved(){
     save();
@@ -163,7 +152,7 @@ if($('findAddressBtn')) $('findAddressBtn').onclick=async()=>{
   }
   marker.on('dragend',moved);
   map.on('click',e=>{marker.setLatLng(e.latlng);moved();});
-  el._map=map;save();setTimeout(()=>map.invalidateSize(true),150);
+  el._map=map;setTimeout(()=>map.invalidateSize(true),150);
   const b=document.getElementById('findAddressBtn');
   if(b&&!b.dataset.bound){b.dataset.bound='1';b.onclick=async()=>{
    const a=document.getElementById('regAddress'),c=document.getElementById('regCity');

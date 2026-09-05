@@ -750,16 +750,40 @@ window.addEventListener('pageshow',()=>{
 });
 
 // v105 account state: anonymous browsing, persistent client account, linked ProfiNaviPro.
+function pnOpenClientAuth(mode='login'){
+ const params=new URLSearchParams({return:'client.html'});
+ if(mode==='register') params.set('mode','register');
+ location.href=`client-login.html?${params.toString()}`;
+}
 async function pnRefreshClientAccount(){
  const btn=document.getElementById('openAccount');
  const host=document.getElementById('clientAccountDynamic');
  let user=null;try{user=await window.PNAuth?.syncLocalUser()}catch(e){console.warn(e)}
  if(!user?.name){
-   if(btn){btn.textContent='';btn.style.visibility='hidden'}
-   if(host)host.innerHTML='<div class="client-account-header"><div class="client-account-title"><h2>ProfiNavi</h2><p>Аккаунт появится после первой записи</p></div></div>';
+   if(btn){
+    btn.style.visibility='visible';
+    btn.disabled=false;
+    btn.classList.add('guest-auth-btn');
+    btn.setAttribute('aria-label','Войти или зарегистрироваться');
+    btn.textContent='Войти';
+   }
+   if(host)host.innerHTML=`
+     <div class="client-account-header guest-client-account-header"><div class="client-account-title"><h2>Вход в ProfiNavi</h2><p>Войдите или зарегистрируйтесь, чтобы сохранять записи, видеть чаты и управлять своими данными.</p></div></div>
+     <div class="client-account-section client-account-auth-actions">
+       <button class="wide" type="button" id="pnGuestLogin">Войти</button>
+       <button class="wide light" type="button" id="pnGuestRegister">Зарегистрироваться</button>
+     </div>`;
+   host?.querySelector('#pnGuestLogin')?.addEventListener('click',()=>pnOpenClientAuth('login'));
+   host?.querySelector('#pnGuestRegister')?.addEventListener('click',()=>pnOpenClientAuth('register'));
    return;
  }
- if(btn){btn.style.visibility='visible';btn.textContent=(user.name[0]||'U').toUpperCase()}
+ if(btn){
+  btn.style.visibility='visible';
+  btn.disabled=false;
+  btn.classList.remove('guest-auth-btn');
+  btn.setAttribute('aria-label','Аккаунт');
+  btn.textContent=(user.name[0]||'U').toUpperCase();
+ }
  let hasMaster=false;try{hasMaster=await window.PNAuth.hasMasterProfile()}catch(e){}
  if(host)host.innerHTML=`
    <div class="client-account-header"><div class="big-avatar">${(user.name[0]||'U').toUpperCase()}</div><div class="client-account-title"><h2>${user.name}</h2><p>Аккаунт ProfiNavi</p></div></div>
@@ -768,8 +792,22 @@ async function pnRefreshClientAccount(){
      ${user.phone?`<div class="client-account-row"><span>Телефон</span><strong>${user.phone}</strong></div>`:''}
    </div></div>
    <div class="client-account-section client-account-pro"><h3>ProfiNaviPro</h3><p>${hasMaster?'Управляйте своим кабинетом мастера.':'Хотите принимать клиентов через ProfiNavi?'}</p>
-   <button class="wide account-master-link" id="pnMasterAction">${hasMaster?'Кабинет мастера · ProfiNaviPro':'Стать мастером'}</button></div>`;
+   <button class="wide account-master-link" id="pnMasterAction">${hasMaster?'Кабинет мастера · ProfiNaviPro':'Стать мастером'}</button></div>
+   <div class="client-account-section client-account-session"><button class="client-logout-btn" type="button" id="pnClientLogout">Выйти из аккаунта</button></div>`;
  host.querySelector('#pnMasterAction').onclick=()=>location.href=hasMaster?'master-login.html':'master-login.html#register';
+ host.querySelector('#pnClientLogout').onclick=pnLogoutClient;
+}
+async function pnLogoutClient(){
+ const btn=document.getElementById('pnClientLogout');
+ if(btn){btn.disabled=true;btn.textContent='Выходим…'}
+ try{
+  await window.PNAuth?.signOut?.();
+ }catch(e){
+  console.warn('Client logout:',e);
+  try{window.PNAuth?.clearLocalAuthState?.()}catch(_){}
+ }
+ try{closeModal('accountModal')}catch(e){}
+ location.replace('client.html');
 }
 window.addEventListener('DOMContentLoaded',()=>pnRefreshClientAccount());
 window.addEventListener('pageshow',()=>pnRefreshClientAccount());

@@ -32,6 +32,7 @@ function formatLocal(v){const d=digitsLocal(v),a=d.slice(0,3),b=d.slice(3,5),c=d
 function bindPhone(id){const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{el.value=formatLocal(el.value)})}
 const $=id=>document.getElementById(id);let pending=null;
 const params=new URLSearchParams(location.search);const returnTo=params.get('return')||'client.html';
+const startMode=(params.get('mode')||location.hash.replace('#','')||'').toLowerCase();
 function finishClientAuth(){localStorage.setItem('pn_last_mode','client');location.href=returnTo}
 function pane(id){['loginPane','registerPane','codePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
 function openCodePane(){
@@ -59,13 +60,22 @@ $('verifyBtn').onclick=async()=>{
  btn.disabled=true;btn.textContent='Проверяем…';
  try{
    const isRegister=pending.mode==='register';
-   const {error}=await PNAuth.verifyOtp('phone',pending.phone,code,{shouldCreateUser:isRegister,purpose:isRegister?'client-register':'client-login'});if(error)throw error;
+   const {data:verified,error}=await PNAuth.verifyOtp('phone',pending.phone,code,{shouldCreateUser:isRegister,purpose:isRegister?'client-register':'client-login'});if(error)throw error;
    const user=await PNAuth.currentUser();if(!user)throw new Error('Не удалось создать сессию');
    if(isRegister){
-     const {error:pErr}=await pnSupabase.from('profiles').upsert({id:user.id,name:pending.name,phone:pending.phone,role:'client',updated_at:new Date().toISOString()},{onConflict:'id'});if(pErr)throw pErr;
-     await pnSupabase.auth.updateUser({data:{name:pending.name,phone:pending.phone}});
+     const {data:existingProfile,error:existingErr}=await pnSupabase.from('profiles').select('role').eq('id',user.id).maybeSingle();if(existingErr)throw existingErr;
+     const {error:pErr}=await pnSupabase.from('profiles').upsert({id:user.id,name:pending.name,phone:pending.phone,role:existingProfile?.role||'client',updated_at:new Date().toISOString()},{onConflict:'id'});if(pErr)throw pErr;
+     const {error:metaErr}=await pnSupabase.auth.updateUser({data:{name:pending.name,phone:pending.phone}});if(metaErr)throw metaErr;
    }
    await PNAuth.syncLocalUser();finishClientAuth();
  }catch(e){alert((pending.mode==='register'?'Не удалось зарегистрироваться: ':'Не удалось войти: ')+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
 };
+
+window.addEventListener('DOMContentLoaded',async()=>{
+ try{
+  if(startMode==='register') pane('registerPane');
+  const user=await PNAuth.currentUser();
+  if(user && !params.has('force')){await PNAuth.syncLocalUser();finishClientAuth()}
+ }catch(e){}
+});
 </script><script src="pn-i18n.js"></script><script src="pn-pwa.js"></script></body></html>

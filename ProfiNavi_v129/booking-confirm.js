@@ -9,29 +9,25 @@ document.getElementById('confirmContent').innerHTML=`<header class="booking-head
 async function completeBooking(){
  const user=JSON.parse(localStorage.getItem('pn_client_user')||'null')||{};
  const masterName=names[Number(master)]||names[0]||'Мастер ProfiNavi';
- const rawDate=q.get('date')||new Date().toISOString();
- const baseDate=new Date(rawDate);
- if(Number.isNaN(baseDate.getTime())){
-   alert('Некорректная дата записи. Выберите время ещё раз.');
-   return;
+ const canonicalStartsAt=q.get('startsAt');
+ let startsAt=canonicalStartsAt?new Date(canonicalStartsAt):null;
+ if(!startsAt||Number.isNaN(startsAt.getTime())){
+   const rawDate=q.get('date')||new Date().toISOString();
+   const baseDate=new Date(rawDate);
+   if(Number.isNaN(baseDate.getTime())){alert('Некорректная дата записи. Выберите время ещё раз.');return;}
+   const [hh,mm]=String(time||'12:00').split(':').map(Number);
+   startsAt=new Date(baseDate.getFullYear(),baseDate.getMonth(),baseDate.getDate(),Number.isFinite(hh)?hh:12,Number.isFinite(mm)?mm:0,0,0);
  }
- const [hh,mm]=String(time||'12:00').split(':').map(Number);
- const startsAt=new Date(
-   baseDate.getFullYear(),
-   baseDate.getMonth(),
-   baseDate.getDate(),
-   Number.isFinite(hh)?hh:12,
-   Number.isFinite(mm)?mm:0,
-   0,0
- );
  let dbRow;
  try{
    if(!window.PNData)throw new Error('База данных не загрузилась');
    dbRow=await window.PNData.createBooking({master:Number(master),masterName,service,serviceId:serviceId||null,startsAt:startsAt.toISOString(),price:0});
  }catch(e){
    const raw=String(e?.message||'');
+   console.error('ProfiNavi booking create failed',{error:e,code:e?.code,master,serviceId,startsAt:startsAt.toISOString()});
    const occupied=e?.code==='23P01'||/уже недоступно|overlap|exclusion constraint|conflicting key/i.test(raw);
-   alert(occupied?'Это время уже занято. Обновите календарь и выберите другое свободное окно.':'Не удалось сохранить запись в базе: '+raw);
+   const detail=window.PN_TEST_MODE&&raw?`\n\nДиагностика: ${raw}`:'';
+   alert((occupied?'Это время уже занято. Обновите календарь и выберите другое свободное окно.':'Не удалось сохранить запись в базе: '+raw)+detail);
    return;
  }
  const booking={

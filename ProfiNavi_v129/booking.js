@@ -31,6 +31,7 @@ let serviceName=qs.get('service')||'';
 let service=null;
 let selectedDate=null;
 let selectedTime=null;
+let selectedStartsAt=null;
 let loadingBackend=true;
 let loadError='';
 
@@ -117,9 +118,13 @@ function isFullyCoveredByOpenSlots(date,time){
  for(let t=candidate.start;t<candidate.end;t+=step*60000){const d=new Date(t),label=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;if(!times.has(label))return false}
  return true;
 }
+function canonicalSlotIso(date,time){
+ const key=localDateKey(date);
+ return m?.slotIsoMap?.[key]?.[time]||m?.slotIntervals?.[key]?.find(iv=>iv.time===time)?.iso||null;
+}
 function isAvailable(date,time){
- if(isPastSlot(date,time)||isBookedAlready(date,time))return false;
- if(m?._backend)return (m.slotMap?.[localDateKey(date)]||[]).includes(time)&&isFullyCoveredByOpenSlots(date,time);
+ if(loadingBackend||isPastSlot(date,time)||isBookedAlready(date,time))return false;
+ if(m?._backend)return !!canonicalSlotIso(date,time)&&(m.slotMap?.[localDateKey(date)]||[]).includes(time)&&isFullyCoveredByOpenSlots(date,time);
  return false;
 }
 function fmtDate(d){return `${d.getDate()} ${monthNames[d.getMonth()].toLowerCase()}`}
@@ -148,14 +153,14 @@ function render(){
    <div class="booking-month-row"><button ${atStart()?'disabled':''} onclick="shiftWeek(-7)" aria-label="Предыдущая неделя">‹</button><b>${monthNames[days[0].getMonth()]} ${days[0].getFullYear()}</b><button ${atEnd()?'disabled':''} onclick="shiftWeek(7)" aria-label="Следующая неделя">›</button></div>
    <div class="booking-table-wrap"><table class="booking-table">
     <thead><tr><th aria-label="Часы"></th>${days.map(d=>`<th class="${sameDay(d,today)?'today':''}"><b>${d.getDate()}</b><span>${dayNames[d.getDay()]}</span></th>`).join('')}</tr></thead>
-    <tbody>${times.map(t=>`<tr><th>${t}</th>${days.map(d=>{const ok=isAvailable(d,t),selected=sameDay(selectedDate,d)&&selectedTime===t;return `<td><button class="slot ${ok?'available':'busy'} ${selected?'selected':''}" ${ok?`onclick="selectSlot('${d.toISOString()}','${t}')"`:'disabled'} aria-label="${ok?'Доступно':(isPastSlot(d,t)?'Время прошло':'Недоступно')} ${fmtDate(d)} ${t}">${ok?'○':'×'}</button></td>`}).join('')}</tr>`).join('')}</tbody>
+    <tbody>${times.map(t=>`<tr><th>${t}</th>${days.map(d=>{const ok=isAvailable(d,t),selected=sameDay(selectedDate,d)&&selectedTime===t,slotIso=ok?canonicalSlotIso(d,t):'';return `<td><button class="slot ${ok?'available':'busy'} ${selected?'selected':''}" ${ok?`onclick="selectSlot('${encodeURIComponent(slotIso)}','${t}')"`:'disabled'} aria-label="${ok?'Доступно':(isPastSlot(d,t)?'Время прошло':'Недоступно')} ${fmtDate(d)} ${t}">${ok?'○':'×'}</button></td>`}).join('')}</tr>`).join('')}</tbody>
    </table></div>`}
   </section>
   <div class="booking-footer"><div>${selectedDate?`<b>${fmtDate(selectedDate)}, ${selectedTime}</b><span>${bookingEsc(service.name)}</span>`:'<b>Выберите свободное время</b><span>Доступные слоты отмечены кружком</span>'}</div><button ${selectedDate?'':'disabled'} onclick="confirmBooking()">Продолжить</button></div>`;
 }
 function shiftWeek(delta){const next=new Date(visibleStart);next.setDate(next.getDate()+delta);if(next<today)visibleStart=new Date(today);else if(next>maxDate)return;else visibleStart=next;render()}
-function selectSlot(iso,time){selectedDate=new Date(iso);selectedTime=time;render();setTimeout(()=>document.querySelector('.booking-footer')?.scrollIntoView({behavior:'smooth',block:'end'}),30)}
-function confirmBooking(){if(!selectedDate||!selectedTime)return;const params=new URLSearchParams({master:String(masterIndex),service:service.name,date:selectedDate.toISOString(),time:selectedTime});if(service.id)params.set('serviceId',String(service.id));location.href=`booking-confirm.html?${params.toString()}`}
+function selectSlot(encodedIso,time){const iso=decodeURIComponent(encodedIso||'');const exact=new Date(iso);if(Number.isNaN(exact.getTime()))return;selectedStartsAt=exact.toISOString();selectedDate=exact;selectedTime=time;render();setTimeout(()=>document.querySelector('.booking-footer')?.scrollIntoView({behavior:'smooth',block:'end'}),30)}
+function confirmBooking(){if(!selectedDate||!selectedTime||!selectedStartsAt)return;const params=new URLSearchParams({master:String(masterIndex),service:service.name,date:selectedDate.toISOString(),startsAt:selectedStartsAt,time:selectedTime});if(service.id)params.set('serviceId',String(service.id));location.href=`booking-confirm.html?${params.toString()}`}
 
 async function pnHydrateBookingMaster(){
  loadingBackend=true;loadError='';if(!m)render();
@@ -166,6 +171,7 @@ async function pnHydrateBookingMaster(){
   const dynamic=window.PNRanking.fromBundle(b.profile,b.services,b.works,b.slots||[]);
   if(!dynamic)throw new Error('Не удалось прочитать профиль мастера.');
   applyMaster(dynamic);
+  if(selectedStartsAt&&!(b.slots||[]).some(x=>new Date(x.starts_at).toISOString()===selectedStartsAt)){selectedStartsAt=null;selectedDate=null;selectedTime=null;}
   try{localStorage.setItem(`pn_dynamic_master_${masterIndex}`,JSON.stringify(dynamic))}catch(e){}
  }catch(e){console.warn('booking schedule load',e);loadError=e?.message||'Ошибка загрузки расписания';}
  finally{loadingBackend=false;render()}

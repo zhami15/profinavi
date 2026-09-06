@@ -1,4 +1,4 @@
-# ProfiNavi v141 — schedule database sync fix
+# ProfiNavi v142 RC1 — schedule database sync fix
 
 v138 — стабильная версия после полного регрессионного прохода и перехода на чистое состояние базы.
 
@@ -56,3 +56,10 @@ Auth identities на сервере специально не удаляются
 ## Тесты
 
 См. `REGRESSION_REPORT.md`.
+
+
+## v143 RC2 controlled stabilization
+- No database schema changes.
+- Booking now carries the exact canonical availability_slots.starts_at ISO value from Supabase through confirmation.
+- Cached availability is disabled while the live schedule refresh is in progress.
+- Test mode surfaces the raw booking backend error for diagnostics.

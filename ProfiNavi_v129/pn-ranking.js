@@ -81,9 +81,9 @@
     return {
       id,_backend:true,user_id:profile.user_id,legacyId:id,
       name:profile.profile_name||'Мастер ProfiNavi',cat,categories:cats,
-      district:[profile.area,profile.address].filter(Boolean).join(' · ')||profile.city||'Бишкек',area:profile.area||'',address:profile.address||'',walk:'на месте',
+      city:profile.city||'Бишкек',district:[profile.area,profile.address].filter(Boolean).join(' · ')||profile.city||'Бишкек',area:profile.area||'',address:profile.address||'',walk:'на месте',
       price,priceValue,available,slotMap,slotIntervals,slotIsoMap,scheduleStep,rating:Number(profile.rating)||0,reviewsCount:Number(profile.reviews_count)||0,ratingConfidence:Number(profile.rating_confidence)||0,topScore:Number(profile.top_score)||0,
-      createdAt:profile.created_at,isNew:ageDays(profile.created_at)<30,experience:profile.experience_text||'',saves:0,emoji:emojiMap[cat]||'✦',avatar,
+      createdAt:profile.created_at,isNew:ageDays(profile.created_at)<30,experience:profile.experience_text||'',saves:Number(profile.saves_count)||0,emoji:emojiMap[cat]||'✦',avatar,
       desc:profile.bio||'',about:profile.bio||'',lat:Number(profile.latitude)||42.8746,lng:Number(profile.longitude)||74.5698,bookingDays:60,services:sv.length?sv:[{name:'Услуга',desc:'',price:'0 сом',time:''}],gallery:gallery.length?gallery:[avatar],works:gallery,cover:profile.cover_url||gallery[0]||avatar,strengths:profile.strengths_tags||[],payment:profile.payment||'',locationInfo:profile.location_info||'',scheduleType:profile.schedule_config?.days||'Ежедневно',workDays:profile.schedule_config?.workDays||[],openTime:profile.schedule_config?.start||'10:00',closeTime:profile.schedule_config?.end||'19:00',
       is_published:!!profile.is_published,rankingBreakdown:profile.ranking_breakdown||{}
     };

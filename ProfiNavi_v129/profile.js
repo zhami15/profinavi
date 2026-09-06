@@ -129,8 +129,9 @@ function syncedServiceCard(s,i,m,p){
 
 const params=new URLSearchParams(location.search);
 let masterIndex=Number(params.get('id')||0);
-const requestedServiceIndex=Number(params.get('service'));
-const hasRequestedService=Number.isInteger(requestedServiceIndex)&&requestedServiceIndex>=0;
+const hasServiceParam=params.has('service');
+const requestedServiceIndex=hasServiceParam?Number(params.get('service')):-1;
+const hasRequestedService=hasServiceParam&&Number.isInteger(requestedServiceIndex)&&requestedServiceIndex>=0;
 if(!Number.isInteger(masterIndex)||masterIndex<0) masterIndex=0;
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
 const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
@@ -150,9 +151,25 @@ function profileMenu(m){
   </article>`;
  }).join('');
 }
-function toggleFav(){
- const favs=getFavs(); const pos=favs.indexOf(masterIndex);
- pos>=0?favs.splice(pos,1):favs.push(masterIndex); setFavs(favs); renderProfile();
+async function toggleFav(){
+ const favs=getFavs(),pos=favs.indexOf(masterIndex),turningOn=pos<0;
+ if(turningOn)favs.push(masterIndex);else favs.splice(pos,1);
+ localStorage.setItem('pn_favs',JSON.stringify(favs));renderProfile();
+ try{
+  const user=await window.PNAuth?.currentUser?.();if(!user)return;
+  const result=await window.PNData?.setLegacyFavorite?.(masterIndex,turningOn);
+  if(result&&masters[masterIndex]&&Number.isFinite(Number(result.savesCount))){
+   masters[masterIndex].saves=Number(result.savesCount);
+   try{localStorage.setItem(`pn_dynamic_master_${masterIndex}`,JSON.stringify(masters[masterIndex]))}catch(e){}
+  }
+  renderProfile();
+ }catch(e){
+  console.warn('Profile favorite sync:',e);
+  const current=getFavs(),idx=current.indexOf(masterIndex);
+  if(turningOn&&idx>=0)current.splice(idx,1);
+  if(!turningOn&&idx<0)current.push(masterIndex);
+  localStorage.setItem('pn_favs',JSON.stringify(current));renderProfile();
+ }
 }
 function showBooking(service){
  const params=new URLSearchParams({master:String(masterIndex),service});
@@ -197,7 +214,7 @@ function renderProfile(){
       <p>${area?`Район: ${pnProfileEsc(area)}`:'Район не указан'}</p>
       <div class="profile-rating"><span>${ratingView}</span><button class="reviews-link" onclick="showClientAllReviews()">${reviews} отзывов</button></div>
     </div>
-    <div class="profile-save-count"><button class="profile-big-heart ${fav?'saved':''}" onclick="toggleFav()">${fav?'♥':'♡'}</button><small>${m.saves+(fav?1:0)}<br>сохранений</small></div>
+    <div class="profile-save-count"><button class="profile-big-heart ${fav?'saved':''}" onclick="toggleFav()">${fav?'♥':'♡'}</button><small>${Number(m.saves)||0}<br>сохранений</small></div>
    </section>
 
    <nav class="profile-tabs" id="profileTabs">
@@ -250,6 +267,10 @@ function renderProfile(){
  bindTabs();
  initProfileMap({...m,name,district:address,avatar});
 
+ if(!hasRequestedService){
+  history.scrollRestoration='manual';
+  requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}));
+ }
  if(hasRequestedService){
   requestAnimationFrame(()=>setTimeout(()=>{
    const target=document.getElementById(`service-${requestedServiceIndex}`)||document.getElementById('menu');
@@ -328,3 +349,8 @@ async function pnHydratePublicProfile(){
  }catch(e){console.warn('public profile sync',e);renderProfile()}
 }
 window.addEventListener('DOMContentLoaded',()=>setTimeout(pnHydratePublicProfile,100));
+
+
+window.addEventListener('pageshow',event=>{
+ if(!hasRequestedService && event.persisted)window.scrollTo({top:0,left:0,behavior:'auto'});
+});

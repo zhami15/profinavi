@@ -1,4 +1,4 @@
-# ProfiNavi v142 RC1 — schedule database sync fix
+# ProfiNavi v144 — client.html page stabilization
 
 v138 — стабильная версия после полного регрессионного прохода и перехода на чистое состояние базы.
 

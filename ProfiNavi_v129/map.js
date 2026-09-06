@@ -3,6 +3,19 @@ const mapAreas=['center','jal','microdistricts','asia','asia','polytech','alamed
 const mapAvailability=[['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow'],['today'],['today','tomorrow'],['tomorrow']];
 const masters=window.PNCloneMasters().map((m,id)=>({...m,id,services:[m.cat],area:mapAreas[id]||'center',priceValue:Number.parseInt(String(m.price).replace(/\D/g,''),10)||0,price:m.price,available:mapAvailability[id]||['tomorrow'],rating:Number(m.rating)||0}));
 window.masters=masters;
+const PN_MAP_CITIES={
+ 'Бишкек':{lat:42.8746,lng:74.5698,zoom:12},
+ 'Ош':{lat:40.5139,lng:72.8161,zoom:12},
+ 'Манас':{lat:40.9333,lng:72.9833,zoom:12},
+ 'Каракол':{lat:42.4907,lng:78.3936,zoom:12},
+ 'Нарын':{lat:41.4287,lng:75.9911,zoom:12},
+ 'Талас':{lat:42.5228,lng:72.2427,zoom:12},
+ 'Баткен':{lat:40.0626,lng:70.8194,zoom:12}
+};
+const pnMapParams=new URLSearchParams(location.search);
+const pnExplicitCity=pnMapParams.has('city');
+const selectedCity=PN_MAP_CITIES[pnMapParams.get('city')]?pnMapParams.get('city'):'Бишкек';
+function pnMapMasterCity(m){return String(m?.city||'Бишкек').trim()||'Бишкек'}
 function mapEsc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
 function dynamicAreaOptions(){return [...new Set(masters.filter(Boolean).map(m=>String(m.area||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru')).map(x=>[x,x])}
 
@@ -33,6 +46,7 @@ function masterPriceValues(m){
 }
 function visible(){
  let list=masters.filter(m=>{
+   if(pnMapMasterCity(m)!==selectedCity)return false;
    const prices=masterPriceValues(m);
    if(!prices.some(v=>v>=filters.priceMin&&(filters.priceMax===null||v<=filters.priceMax)))return false;
    if(filters.date==='today'&&!m.available.includes('today'))return false;
@@ -85,10 +99,10 @@ function showMasterCard(m){
 function clearMarkers(){markers.forEach(x=>map.removeLayer(x));markers=[]}
 function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${mapEsc(m.avatar)}" alt=""><span>${mapEsc(m.name)}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
 function renderMarkers(){if(!map){renderSheet();return}clearMarkers();visible().forEach(m=>{const marker=L.marker([m.lat,m.lng],{icon:makeIcon(m)}).addTo(map);marker.on('click',()=>{showMasterCard(m);const card=masterStrip?.querySelector(`[data-master-id="${m.id}"]`);if(card){masterStrip.querySelectorAll('.map-strip-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');card.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}});markers.push(marker)});renderSheet();fitAll();updateTriggerLabels()}
-function fitAll(){if(!map)return;const pts=visible().map(m=>[m.lat,m.lng]);if(userLocation)pts.unshift([userLocation.lat,userLocation.lng]);if(pts.length)map.fitBounds(pts,{paddingTopLeft:[35,35],paddingBottomRight:[35,35],maxZoom:14})}
-function requestLocation(){if(!navigator.geolocation){statusEl.textContent='Мастера на карте Бишкека';return}navigator.geolocation.getCurrentPosition(p=>{userLocation={lat:p.coords.latitude,lng:p.coords.longitude};statusEl.textContent='Показываем мастеров рядом с вами';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker([userLocation.lat,userLocation.lng],{radius:9,weight:4,color:'#fff',fillColor:'#2f80ed',fillOpacity:1}).addTo(map);renderMarkers()},e=>{statusEl.textContent=e.code===1?'Мастера на карте Бишкека':'Мастера показаны на карте Бишкека';fitAll()},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
+function fitAll(){if(!map)return;const pts=visible().map(m=>[m.lat,m.lng]);if(userLocation&&!pnExplicitCity)pts.unshift([userLocation.lat,userLocation.lng]);if(pts.length)map.fitBounds(pts,{paddingTopLeft:[35,35],paddingBottomRight:[35,35],maxZoom:14});else{const c=PN_MAP_CITIES[selectedCity];map.setView([c.lat,c.lng],c.zoom)}}
+function requestLocation(){if(pnExplicitCity){statusEl.textContent=`Мастера на карте: ${selectedCity}`;fitAll();return}if(!navigator.geolocation){statusEl.textContent=`Мастера на карте: ${selectedCity}`;return}navigator.geolocation.getCurrentPosition(p=>{userLocation={lat:p.coords.latitude,lng:p.coords.longitude};statusEl.textContent='Показываем мастеров рядом с вами';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker([userLocation.lat,userLocation.lng],{radius:9,weight:4,color:'#fff',fillColor:'#2f80ed',fillOpacity:1}).addTo(map);renderMarkers()},e=>{statusEl.textContent=`Мастера на карте: ${selectedCity}`;fitAll()},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
 function showError(){errorEl.textContent='Карта временно не загрузилась. Список мастеров доступен ниже.';errorEl.classList.remove('hidden');statusEl.textContent='Список мастеров доступен ниже'}
-function loadMap(){const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);const s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';s.onload=()=>{try{map=L.map('fullMap',{zoomControl:false}).setView([42.8585,74.5925],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);L.control.zoom({position:'topright'}).addTo(map);map.on('click',()=>selectedCard&&selectedCard.classList.add('hidden'));renderMarkers();requestLocation();setTimeout(()=>map.invalidateSize(),100)}catch(e){showError()}};s.onerror=showError;document.head.appendChild(s)}
+function loadMap(){const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);const s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';s.onload=()=>{try{const c=PN_MAP_CITIES[selectedCity];map=L.map('fullMap',{zoomControl:false}).setView([c.lat,c.lng],c.zoom);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);L.control.zoom({position:'topright'}).addTo(map);map.on('click',()=>selectedCard&&selectedCard.classList.add('hidden'));renderMarkers();requestLocation();setTimeout(()=>map.invalidateSize(),100)}catch(e){showError()}};s.onerror=showError;document.head.appendChild(s)}
 
 const configs={
  price:{title:'Цена',hint:'Укажите максимальную стоимость'},

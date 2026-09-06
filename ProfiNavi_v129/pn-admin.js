@@ -118,6 +118,18 @@
   }
   async function sendSupportMessage(threadId,body){const u=await ensureRole();const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');const r=await sb.from('support_messages').insert({thread_id:threadId,sender_id:u.id,body:text}).select().single();if(r.error)throw r.error;return r.data}
   async function markSupportRead(threadId){const u=await ensureRole();const r=await sb.from('support_reads').upsert({thread_id:threadId,user_id:u.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(r.error)throw r.error}
+  async function listHomeBanners(){
+    await ensureRole();
+    const {data,error}=await sb.from('home_banners').select('position,image_url,updated_at').order('position');
+    if(error)throw error;return data||[];
+  }
+  async function saveHomeBanner(position,file){
+    const u=await ensureRole();const pos=Number(position);
+    if(![1,2,3].includes(pos))throw new Error('Некорректная позиция баннера');
+    const url=await upload('master-media',u.id,file,'home-banners');
+    const {data,error}=await sb.from('home_banners').upsert({position:pos,image_url:url,updated_by:u.id,updated_at:new Date().toISOString()},{onConflict:'position'}).select().single();
+    if(error)throw error;return data;
+  }
   async function logout(){try{await window.PNAuth?.signOut?.()}catch(e){try{await sb.auth.signOut({scope:'local'})}catch(_){}}location.replace('admin-login.html')}
-  window.PNAdmin={esc,normalizePhone,user,ensureRole,requireAdmin,listMasters,loadMaster,log,uploadMaster:(uid,file,kind)=>upload('master-media',uid,file,kind),uploadService:(uid,file)=>upload('service-media',uid,file,'service'),saveProfile,saveService,addService,addWork,deleteWork,replaceSchedule,listSupportThreads,loadSupportThread,sendSupportMessage,markSupportRead,logout};
+  window.PNAdmin={esc,normalizePhone,user,ensureRole,requireAdmin,listMasters,loadMaster,log,uploadMaster:(uid,file,kind)=>upload('master-media',uid,file,kind),uploadService:(uid,file)=>upload('service-media',uid,file,'service'),saveProfile,saveService,addService,addWork,deleteWork,replaceSchedule,listSupportThreads,loadSupportThread,sendSupportMessage,markSupportRead,listHomeBanners,saveHomeBanner,logout};
 })();

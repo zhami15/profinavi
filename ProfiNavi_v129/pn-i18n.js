@@ -9,7 +9,7 @@
   'Все':'Баары','Волосы':'Чач','Ногти':'Тырмак','Ресницы':'Кирпик','Брови':'Каш','Макияж':'Макияж',
   'Свободные мастера':'Бош мастерлер','Сегодня':'Бүгүн','Завтра':'Эртең',
   'Мастера рядом':'Жакын мастерлер','Подбираем мастеров':'Мастерлерди тандап жатабыз',
-  'Карта':'Карта','Карта мастеров':'Мастерлер картасы','Открыть →':'Ачуу →',
+  'Карта':'Карта','Карта мастеров':'Мастерлер картасы','Открыть →':'Ачуу →','Двигайте карту свободно':'Картаны эркин жылдырыңыз',
   'Карта временно недоступна':'Карта убактылуу жеткиликсиз','Проверьте интернет-соединение.':'Интернет байланышын текшериңиз.',
   'Аккаунт':'Аккаунт','Быстрая запись по дате':'Күн боюнча тез жазылуу','Нижняя навигация':'Төмөнкү навигация',
   'Установить':'Орнотуу','Установить ProfiNavi':'ProfiNavi орнотуу','На экран телефона':'Телефондун башкы экранына',
@@ -69,6 +69,12 @@
      btn.setAttribute('aria-label',to==='kg'?'Орусча':'Кыргызча');
      btn.title=to==='kg'?'Русский':'Кыргызча';
    });
+   document.querySelectorAll('[data-pn-lang-short]').forEach(el=>{el.textContent=to==='kg'?'Кыр':'Рус'});
+   document.querySelectorAll('[data-pn-lang-option]').forEach(btn=>{
+     const active=btn.dataset.pnLangOption===to;
+     btn.classList.toggle('active',active);
+     btn.setAttribute('aria-current',active?'true':'false');
+   });
  }
  window.PNI18N={
    get:lang,
@@ -76,7 +82,25 @@
    toggle(){this.set(lang()==='kg'?'ru':'kg')},
    apply:translateNode
  };
- document.addEventListener('DOMContentLoaded',()=>translateNode());
+ document.addEventListener('DOMContentLoaded',()=>{
+   translateNode();
+   const current=document.getElementById('pnLangCurrent');
+   const menu=document.getElementById('pnLangMenu');
+   const closeMenu=()=>{menu?.classList.add('hidden');current?.setAttribute('aria-expanded','false')};
+   current?.addEventListener('click',e=>{
+     e.stopPropagation();
+     const opening=menu?.classList.contains('hidden');
+     menu?.classList.toggle('hidden',!opening);
+     current.setAttribute('aria-expanded',opening?'true':'false');
+   });
+   menu?.querySelectorAll('[data-pn-lang-option]').forEach(btn=>btn.addEventListener('click',()=>{
+     const v=btn.dataset.pnLangOption;
+     if(v===lang()){closeMenu();return}
+     window.PNI18N.set(v);
+   }));
+   document.addEventListener('click',e=>{if(!e.target.closest('#pnLangSwitcher'))closeMenu()});
+   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+ });
  const mo=new MutationObserver(ms=>{
    if(!document.body)return;
    for(const m of ms)for(const n of m.addedNodes)if(n.nodeType===1)translateNode(n);

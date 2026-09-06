@@ -107,6 +107,20 @@ function serviceOfferMarkup(offer){
 
 
 let current='all';let availabilityDate='';
+const PN_HOME_CITIES={
+ 'Бишкек':{lat:42.8746,lng:74.5698,zoom:12},
+ 'Ош':{lat:40.5139,lng:72.8161,zoom:12},
+ 'Манас':{lat:40.9333,lng:72.9833,zoom:12},
+ 'Каракол':{lat:42.4907,lng:78.3936,zoom:12},
+ 'Нарын':{lat:41.4287,lng:75.9911,zoom:12},
+ 'Талас':{lat:42.5228,lng:72.2427,zoom:12},
+ 'Баткен':{lat:40.0626,lng:70.8194,zoom:12}
+};
+const PN_HOME_CITY_KEY='pn_home_city';
+let selectedCity=PN_HOME_CITIES[localStorage.getItem(PN_HOME_CITY_KEY)]?localStorage.getItem(PN_HOME_CITY_KEY):'Бишкек';
+function pnMasterCity(m){return String(m?.city||'Бишкек').trim()||'Бишкек'}
+function pnMasterMatchesCity(m){return pnMasterCity(m)===selectedCity}
+function pnMapUrl(){return `map.html?city=${encodeURIComponent(selectedCity)}`}
 const masterAvailability={};
 const quickDateMeta={};
 function localDateKey(date){
@@ -197,7 +211,7 @@ function renderUserLocationMarker(){
 }
 function focusMapOnUserAndMasters(){
  if(!twoGisMap || !userLocation) return;
- const visible=masters.filter(m=>current==='all'||m.cat===current);
+ const visible=masters.filter(m=>pnMasterMatchesCity(m)&&(current==='all'||m.cat===current));
  const points=[[userLocation.lng,userLocation.lat],...visible.map(m=>[m.lng,m.lat])];
  const lngs=points.map(p=>p[0]), lats=points.map(p=>p[1]);
  const bounds=[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]];
@@ -216,7 +230,7 @@ function requestUserLocation(){
 render();
   if(status)status.textContent='Показываем мастеров рядом с вами';
  },err=>{
-  if(status)status.textContent=err.code===1?'Разрешите геолокацию в браузере':'Показываем мастеров по Бишкеку';
+  if(status)status.textContent=err.code===1?'Разрешите геолокацию в браузере':`Показываем мастеров: ${selectedCity}`;
  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
 }
 
@@ -264,8 +278,8 @@ async function init2GisMap(force=false){
   mapEl.classList.remove('hidden');
   mapEl.innerHTML='';
   twoGisMap = new mapgl.Map('twoGisMap', {
-   center: [74.5925, 42.8585],
-   zoom: 12.4,
+   center: [PN_HOME_CITIES[selectedCity].lng, PN_HOME_CITIES[selectedCity].lat],
+   zoom: PN_HOME_CITIES[selectedCity].zoom,
    key
   });
   render2GisMarkers();
@@ -282,7 +296,7 @@ function render2GisMarkers(){
  twoGisMarkers.forEach(marker => marker.destroy?.());
  twoGisMarkers = [];
  masters.forEach((m,i)=>{
-  if(current !== 'all' && m.cat !== current) return;
+  if(!pnMasterMatchesCity(m) || (current !== 'all' && m.cat !== current)) return;
   const el=document.createElement('button');
   el.className='dg-marker';
   el.type='button';
@@ -351,7 +365,7 @@ function updateStats(){
 }
 function galleryItems(m){
  const images=m.gallery||Array.from({length:6},(_,i)=>m.avatar);
- return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb"><img src="${pnEscHtml(src)}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
+ return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb" role="button" tabindex="0" onclick="event.stopPropagation();openProfile(${mi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openProfile(${mi})}"><img src="${pnEscHtml(src)}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
 }
 function serviceItems(m){
  const list=m.services||[{name:m.cat==='lashes'?'Наращивание ресниц':'Основная услуга',desc:m.desc,price:m.price,time:'1,5 ч.'}];
@@ -449,18 +463,37 @@ function openServiceProfile(masterIndex,serviceIndex){
 function render(){
  applyMasterProSyncToClientHome();
  const q=(search?.value||'').toLowerCase().trim();const favs=getFavs();
- const data=sortedMasters(masters.filter((m,i)=>(current==='all'||m.cat===current)&&masterMatchesQuickDate(m,i,availabilityDate)&&`${m.name} ${m.district} ${m.desc}`.toLowerCase().includes(q)));
+ const data=sortedMasters(masters.filter((m,i)=>pnMasterMatchesCity(m)&&(current==='all'||m.cat===current)&&masterMatchesQuickDate(m,i,availabilityDate)&&`${m.name} ${m.district} ${m.desc}`.toLowerCase().includes(q)));
  document.getElementById('countText').textContent=`Найдено: ${data.length}`;
  grid.innerHTML=data.length?data.map((m)=>{const i=masters.indexOf(m);return `<article class="master-card" onclick="openProfile(${i})">
   <div class="master-card-head">
    <div class="master-identity"><img class="master-avatar" src="${pnEscHtml(m.avatar)}" alt="Фото ${pnEscHtml(m.name)}"><div><div class="name">${pnEscHtml(m.name)}</div><div class="master-stats"><span>${window.PNRanking?.ratingHtml?window.PNRanking.ratingHtml(m):('★ '+m.rating)}</span><span>Район: ${pnEscHtml(m.area||'не указан')}</span></div></div></div>
-   <div class="save-wrap"><button class="fav-card" aria-label="Сохранить мастера" onclick="event.stopPropagation();toggleFav(${i})">${favs.includes(i)?'♥':'♡'}</button><small>${m.saves+(favs.includes(i)?1:0)} сохранений</small></div>
+   <div class="save-wrap"><button class="fav-card" aria-label="Сохранить мастера" onclick="event.stopPropagation();toggleFav(${i})">${favs.includes(i)?'♥':'♡'}</button><small>${Number(m.saves)||0} сохранений</small></div>
   </div>
   <div class="works-carousel">${galleryItems(m)}</div>
   <div class="services-carousel">${serviceItems(m)}</div>
  </article>`}).join(''):`<div class="favorites-empty pn-directory-empty"><b>✦</b><h3>Пока нет мастеров</h3><p>Опубликованные мастера появятся здесь автоматически.</p></div>`;updateStats();
 }
-function toggleFav(i){const favs=getFavs();const pos=favs.indexOf(i);pos>=0?favs.splice(pos,1):favs.push(i);setFavs(favs);render();renderFavorites();}
+async function toggleFav(i){
+ const id=Number(i),favs=getFavs(),pos=favs.indexOf(id),turningOn=pos<0;
+ if(turningOn)favs.push(id);else favs.splice(pos,1);
+ localStorage.setItem('pn_favs',JSON.stringify(favs));
+ render();renderFavorites();
+ try{
+   const user=await window.PNAuth?.currentUser?.();
+   if(!user)return;
+   const result=await window.PNData?.setLegacyFavorite?.(id,turningOn);
+   if(result&&masters[id]&&Number.isFinite(Number(result.savesCount))){masters[id].saves=Number(result.savesCount);try{localStorage.setItem(`pn_dynamic_master_${id}`,JSON.stringify(masters[id]))}catch(e){}}
+   render();renderFavorites();
+ }catch(e){
+   console.warn('Favorite sync:',e);
+   const currentFavs=getFavs(),idx=currentFavs.indexOf(id);
+   if(turningOn&&idx>=0)currentFavs.splice(idx,1);
+   if(!turningOn&&idx<0)currentFavs.push(id);
+   localStorage.setItem('pn_favs',JSON.stringify(currentFavs));
+   render();renderFavorites();
+ }
+}
 function toggleWorkFav(key){const favs=getFavWorks();const pos=favs.indexOf(key);pos>=0?favs.splice(pos,1):favs.push(key);setFavWorks(favs);render();renderSnap(document.querySelector('[data-snap-filter].active')?.dataset.snapFilter||'all');renderFavorites();}
 document.querySelectorAll('.cat').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.cat').forEach(b=>b.classList.remove('active'));btn.classList.add('active');current=btn.dataset.category;render();render2GisMarkers();renderHomeLeafletMarkers();});
 document.querySelectorAll('.quick-date').forEach(btn=>btn.addEventListener('click',()=>{
@@ -471,8 +504,23 @@ document.querySelectorAll('.quick-date').forEach(btn=>btn.addEventListener('clic
  render();
 }));
 search?.addEventListener('input',render);
-document.getElementById('mapToggle')?.addEventListener('click',()=>{window.location.href='map.html'});
-document.getElementById('homeMapOpen')?.addEventListener('click',(event)=>{event.stopPropagation();window.location.href='map.html'});
+document.getElementById('homeMapOpen')?.addEventListener('click',(event)=>{event.stopPropagation();window.location.href=pnMapUrl()});
+const homeCitySelect=document.getElementById('homeCitySelect');
+if(homeCitySelect){
+ homeCitySelect.value=selectedCity;
+ homeCitySelect.addEventListener('change',()=>{
+   selectedCity=PN_HOME_CITIES[homeCitySelect.value]?homeCitySelect.value:'Бишкек';
+   localStorage.setItem(PN_HOME_CITY_KEY,selectedCity);
+   availabilityDate='';
+   document.querySelectorAll('.quick-date').forEach(b=>b.classList.remove('active'));
+   document.querySelector('.quick-date-filter')?.classList.remove('filtered');
+   render();
+   render2GisMarkers();
+   renderHomeLeafletMarkers();
+   const city=PN_HOME_CITIES[selectedCity];
+   if(twoGisMap&&city){twoGisMap.setCenter?.([city.lng,city.lat]);twoGisMap.setZoom?.(city.zoom);}
+ });
+}
 /* v87: home map uses Leaflet/OpenStreetMap only */
 document.querySelectorAll('.pin').forEach(p=>p.onclick=()=>openProfile(Number(p.dataset.master)));
 function openModal(id){document.getElementById(id).classList.remove('hidden')}function closeModal(id){document.getElementById(id).classList.add('hidden')}
@@ -581,7 +629,7 @@ document.getElementById('bottomHome')?.addEventListener('click',()=>{
  setBottomActive('bottomHome');
  window.scrollTo({top:0,behavior:'smooth'});
 });
-document.getElementById('bottomSearch')?.addEventListener('click',()=>{window.location.href='map.html'});
+document.getElementById('bottomSearch')?.addEventListener('click',()=>{window.location.href=pnMapUrl()});
 document.getElementById('bottomSnap')?.addEventListener('click',()=>{window.location.href='snap.html'});
 document.getElementById('bottomChats')?.addEventListener('click',()=>{setBottomActive('bottomChats');});
 
@@ -614,6 +662,58 @@ function renderFavorites(tab='masters'){
 document.querySelectorAll('[data-favorite-tab]').forEach(btn=>btn.addEventListener('click',()=>renderFavorites(btn.dataset.favoriteTab)));
 
 
+
+// Client Home banners: three admin-controlled images with 3-second autoplay.
+// Native horizontal scrolling remains enabled so the user can swipe manually.
+let pnBannerIndex=0,pnBannerTimer=null,pnBannerScrollTimer=null;
+function pnBannerFallbacks(){
+ const urls=masters.filter(Boolean).flatMap(m=>[m.cover,m.gallery?.[0],m.avatar]).filter(Boolean);
+ const unique=[...new Set(urls)];
+ while(unique.length<3)unique.push(unique.length%2===0?'icon-512.png':'icon-192.png');
+ return unique.slice(0,3);
+}
+function pnBannerSetActive(index,scroll=true){
+ const track=document.getElementById('homeBannerTrack'),dots=document.getElementById('homeBannerDots');
+ if(!track)return;
+ const slides=[...track.children];if(!slides.length)return;
+ pnBannerIndex=((Number(index)||0)%slides.length+slides.length)%slides.length;
+ dots?.querySelectorAll('i').forEach((d,i)=>d.classList.toggle('active',i===pnBannerIndex));
+ if(scroll)track.scrollTo({left:pnBannerIndex*track.clientWidth,behavior:'smooth'});
+}
+function pnBannerStart(){
+ clearInterval(pnBannerTimer);
+ pnBannerTimer=setInterval(()=>pnBannerSetActive(pnBannerIndex+1,true),3000);
+}
+function pnRenderHomeBanners(urls){
+ const track=document.getElementById('homeBannerTrack'),dots=document.getElementById('homeBannerDots');
+ if(!track||!dots)return;
+ const list=[...new Set((urls||[]).filter(Boolean))];
+ const fallback=pnBannerFallbacks();
+ while(list.length<3)list.push(fallback[list.length]||'icon-512.png');
+ const final=list.slice(0,3);
+ track.innerHTML=final.map((url,i)=>`<div class="hero-carousel-slide"><img src="${pnEscHtml(url)}" alt="ProfiNavi banner ${i+1}" draggable="false"></div>`).join('');
+ dots.innerHTML=final.map((_,i)=>`<i class="${i===0?'active':''}"></i>`).join('');
+ pnBannerIndex=0;
+ track.onscroll=()=>{
+   clearTimeout(pnBannerScrollTimer);
+   pnBannerScrollTimer=setTimeout(()=>{
+     if(!track.clientWidth)return;
+     pnBannerSetActive(Math.round(track.scrollLeft/track.clientWidth),false);
+   },80);
+ };
+ ['pointerdown','touchstart'].forEach(ev=>track.addEventListener(ev,()=>clearInterval(pnBannerTimer),{passive:true}));
+ ['pointerup','pointercancel','touchend'].forEach(ev=>track.addEventListener(ev,pnBannerStart,{passive:true}));
+ pnBannerStart();
+}
+async function pnLoadHomeBanners(){
+ let urls=[];
+ try{urls=(await window.PNData?.listHomeBanners?.()||[]).map(x=>x.image_url).filter(Boolean)}catch(e){console.warn('Home banners:',e)}
+ pnRenderHomeBanners(urls.length?urls:pnBannerFallbacks());
+}
+window.addEventListener('DOMContentLoaded',pnLoadHomeBanners);
+window.addEventListener('resize',()=>pnBannerSetActive(pnBannerIndex,false));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInterval(pnBannerTimer);else pnBannerStart()});
+
 // Home map uses the same OpenStreetMap/Leaflet engine as the Search screen.
 // This avoids 2GIS API-key/domain restrictions and renders all master markers.
 let homeLeafletMap=null;
@@ -643,7 +743,7 @@ function homeMasterIcon(m){
 function renderHomeLeafletMarkers(){
  if(!homeLeafletMap||!window.L)return;
  homeLeafletMarkers.forEach(x=>homeLeafletMap.removeLayer(x));homeLeafletMarkers=[];
- const visible=masters.filter(m=>current==='all'||m.cat===current);
+ const visible=masters.filter(m=>pnMasterMatchesCity(m)&&(current==='all'||m.cat===current));
  visible.forEach((m,i)=>{
   const masterIndex=masters.indexOf(m);
   const marker=L.marker([m.lat,m.lng],{icon:homeMasterIcon(m)}).addTo(homeLeafletMap);
@@ -652,6 +752,9 @@ function renderHomeLeafletMarkers(){
  });
  if(visible.length){
   homeLeafletMap.fitBounds(visible.map(m=>[m.lat,m.lng]),{padding:[25,25],maxZoom:13});
+ }else{
+  const city=PN_HOME_CITIES[selectedCity]||PN_HOME_CITIES['Бишкек'];
+  homeLeafletMap.setView([city.lat,city.lng],city.zoom);
  }
  setTimeout(()=>homeLeafletMap.invalidateSize(),100);
 }
@@ -677,7 +780,7 @@ async function initHomeLeafletMap(){
     dragging:true,
     scrollWheelZoom:false,
     doubleClickZoom:false
-  }).setView([42.8585,74.5925],12);
+  }).setView([PN_HOME_CITIES[selectedCity].lat,PN_HOME_CITIES[selectedCity].lng],PN_HOME_CITIES[selectedCity].zoom);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
@@ -686,7 +789,7 @@ async function initHomeLeafletMap(){
 
   renderHomeLeafletMarkers();
   const status=document.getElementById('homeMapStatus');
-  if(status)status.textContent='Бишкек · двигайте карту свободно';
+  if(status)status.textContent='Двигайте карту свободно';
  }catch(error){
   console.error('Home map error',error);
   connect?.classList.remove('hidden');
@@ -917,7 +1020,7 @@ async function pnRefreshVisibleMaps(){
 window.addEventListener('load',()=>setTimeout(pnRefreshVisibleMaps,250));
 window.addEventListener('pageshow',()=>setTimeout(pnRefreshVisibleMaps,250));
 
-window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().catch(()=>{}));
+window.addEventListener('DOMContentLoaded',()=>window.PNBackendSync?.hydrateClientFavorites?.().then(()=>render()).catch(()=>{}));
 
 window.addEventListener('DOMContentLoaded',()=>window.PNRealtime?.watchClient?.(()=>Promise.all([pnHydrateClientData(),pnHydrateSupportUnread()]).catch(()=>{})));
 
@@ -926,6 +1029,7 @@ async function pnHydrateRankedDirectory(){
   if(!window.PNRanking?.hydrate)return;
   await window.PNRanking.hydrate(masters);
   render();
+  try{await pnLoadHomeBanners()}catch(e){}
   try{render2GisMarkers()}catch(e){}
   try{renderHomeLeafletMarkers()}catch(e){}
  }catch(e){console.warn('ranked directory sync',e)}

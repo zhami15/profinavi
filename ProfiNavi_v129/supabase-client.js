@@ -194,28 +194,35 @@ window.PNData={
     .select('user_id,legacy_id,profile_name,city,area,address,latitude,longitude,bio,experience_text,categories,avatar_url,cover_url,strengths_tags,payment,location_info,schedule_config,rating,reviews_count,rating_confidence,top_score,ranking_breakdown,is_published,created_at')
     .eq('is_published',true).order('top_score',{ascending:false});
   if(error)throw error;if(!profiles?.length)return [];
-  const ids=profiles.map(x=>x.user_id);
-  const [sv,wo,sl]=await Promise.all([
+  const ids=profiles.map(x=>x.user_id),legacyIds=profiles.map(x=>Number(x.legacy_id)).filter(Number.isFinite);
+  const [sv,wo,sl,fc]=await Promise.all([
     pnSupabase.from('services').select('id,master_id,name,description,price,new_price,promo_label,image_url,duration_minutes,duration_text,is_active,sort_order').in('master_id',ids).eq('is_active',true).order('sort_order'),
     pnSupabase.from('works').select('id,master_id,image_url,caption,sort_order,created_at').in('master_id',ids).order('sort_order'),
-    pnSupabase.from('availability_slots').select('master_id,starts_at,ends_at,is_available').in('master_id',ids).eq('is_available',true).gte('starts_at',new Date().toISOString()).lte('starts_at',new Date(Date.now()+14*86400000).toISOString()).order('starts_at')
+    pnSupabase.from('availability_slots').select('master_id,starts_at,ends_at,is_available').in('master_id',ids).eq('is_available',true).gte('starts_at',new Date().toISOString()).lte('starts_at',new Date(Date.now()+14*86400000).toISOString()).order('starts_at'),
+    legacyIds.length?pnSupabase.from('master_save_counts').select('legacy_master_id,saves_count').in('legacy_master_id',legacyIds):Promise.resolve({data:[],error:null})
   ]);
   if(sv.error)throw sv.error;if(wo.error)throw wo.error;if(sl.error)throw sl.error;
+  // During deployment the count table may not exist yet; directory still stays usable.
+  if(fc.error)console.warn('Save counts unavailable:',fc.error.message||fc.error);
+  const counts=fc.error?[]:(fc.data||[]);
+  const countByLegacy=Object.fromEntries(counts.map(x=>[Number(x.legacy_master_id),Number(x.saves_count)||0]));
   const services=sv.data||[],works=wo.data||[],slots=sl.data||[];
-  return profiles.map(profile=>({profile,services:services.filter(x=>x.master_id===profile.user_id),works:works.filter(x=>x.master_id===profile.user_id),slots:slots.filter(x=>x.master_id===profile.user_id)}));
+  return profiles.map(profile=>({profile:{...profile,saves_count:countByLegacy[Number(profile.legacy_id)]||0},services:services.filter(x=>x.master_id===profile.user_id),works:works.filter(x=>x.master_id===profile.user_id),slots:slots.filter(x=>x.master_id===profile.user_id)}));
  },
  async loadPublicMasterBundle(legacyId){
   const id=Number(legacyId)||0;
   const {data:profile,error}=await pnSupabase.from('master_profiles').select('*').eq('legacy_id',id).eq('is_published',true).maybeSingle();if(error)throw error;if(!profile)return null;
   const nowIso=new Date().toISOString();
   const horizonIso=new Date(Date.now()+62*86400000).toISOString();
-  const [services,works,reviews,slots]=await Promise.all([
+  const [services,works,reviews,slots,count]=await Promise.all([
    pnSupabase.from('services').select('*').eq('master_id',profile.user_id).eq('is_active',true).order('sort_order'),
    pnSupabase.from('works').select('*').eq('master_id',profile.user_id).order('sort_order'),
    pnSupabase.from('reviews').select('*').eq('master_id',profile.user_id).order('created_at',{ascending:false}),
-   pnSupabase.from('availability_slots').select('id,master_id,starts_at,ends_at,is_available').eq('master_id',profile.user_id).eq('is_available',true).gte('starts_at',nowIso).lte('starts_at',horizonIso).order('starts_at')
+   pnSupabase.from('availability_slots').select('id,master_id,starts_at,ends_at,is_available').eq('master_id',profile.user_id).eq('is_available',true).gte('starts_at',nowIso).lte('starts_at',horizonIso).order('starts_at'),
+   pnSupabase.from('master_save_counts').select('saves_count').eq('legacy_master_id',id).maybeSingle()
   ]);for(const r of [services,works,reviews,slots])if(r.error)throw r.error;
-  return {profile,services:services.data||[],works:works.data||[],reviews:reviews.data||[],slots:slots.data||[]};
+  if(count.error)console.warn('Save count unavailable:',count.error.message||count.error);
+  return {profile:{...profile,saves_count:count.error?0:(Number(count.data?.saves_count)||0)},services:services.data||[],works:works.data||[],reviews:reviews.data||[],slots:slots.data||[]};
  }
 };
 
@@ -343,7 +350,18 @@ Object.assign(window.PNData,{
   return{thread,lastMessage:(lastRes.data||[])[0]||null,unreadCount:Number(countRes.count||0)};
  },
  async listLegacyFavorites(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('legacy_favorites').select('legacy_master_id').eq('client_id',user.id);if(error)throw error;return(data||[]).map(x=>Number(x.legacy_master_id))},
- async setLegacyFavorite(id,on){const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');id=Number(id);if(on){const {error}=await pnSupabase.from('legacy_favorites').upsert({client_id:user.id,legacy_master_id:id},{onConflict:'client_id,legacy_master_id'});if(error)throw error}else{const {error}=await pnSupabase.from('legacy_favorites').delete().eq('client_id',user.id).eq('legacy_master_id',id);if(error)throw error}return true}
+ async setLegacyFavorite(id,on){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');id=Number(id);
+  if(on){const {error}=await pnSupabase.from('legacy_favorites').upsert({client_id:user.id,legacy_master_id:id},{onConflict:'client_id,legacy_master_id'});if(error)throw error}
+  else{const {error}=await pnSupabase.from('legacy_favorites').delete().eq('client_id',user.id).eq('legacy_master_id',id);if(error)throw error}
+  const count=await pnSupabase.from('master_save_counts').select('saves_count').eq('legacy_master_id',id).maybeSingle();
+  if(count.error)return{saved:!!on,savesCount:null};
+  return{saved:!!on,savesCount:Number(count.data?.saves_count)||0};
+ },
+ async listHomeBanners(){
+  const {data,error}=await pnSupabase.from('home_banners').select('position,image_url,updated_at').order('position');
+  if(error)throw error;return(data||[]).filter(x=>x.image_url).slice(0,3);
+ }
 });
 window.PNBackendSync={
  async hydrateClientBookings(){
@@ -354,7 +372,7 @@ window.PNBackendSync={
  },
  async hydratePublicMasterCache(legacyId=0){
   const b=await PNData.loadPublicMasterBundle(legacyId);if(!b)return null;const p=b.profile;let c={};try{c=JSON.parse(localStorage.getItem(`pn_master_profile_${legacyId}`)||'{}')}catch(e){}
-  c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};
+  c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),saves:Number(p.saves_count??0),createdAt:p.created_at,is_published:!!p.is_published};
   c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem(`pn_master_profile_${legacyId}`,JSON.stringify(c));
   localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   if(legacyId===0)localStorage.setItem('pn_master_services_0',localStorage.getItem(`pn_master_services_${legacyId}`)||'[]');
@@ -368,7 +386,7 @@ window.PNBackendSync={
    c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,
     about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,
     payment:p.payment||c.payment,locationInfo:p.location_info||c.locationInfo,scheduleType:p.schedule_config?.days||c.scheduleType,workDays:p.schedule_config?.workDays||c.workDays,
-    openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,scheduleStep:Number(p.schedule_config?.step)||c.scheduleStep||60,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c));
+    openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,scheduleStep:Number(p.schedule_config?.step)||c.scheduleStep||60,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),saves:Number(p.saves_count??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c));
    if(p.schedule_config)localStorage.setItem('pn_master_schedule_config',JSON.stringify({days:p.schedule_config.days||'Ежедневно',workDays:Array.isArray(p.schedule_config.workDays)?p.schedule_config.workDays:[],start:p.schedule_config.start||'10:00',end:p.schedule_config.end||'19:00',step:Number(p.schedule_config.step)||60}))}
   localStorage.setItem('pn_master_services_0',JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   {let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem('pn_master_profile_0',JSON.stringify(c))}

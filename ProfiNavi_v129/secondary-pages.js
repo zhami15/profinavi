@@ -135,9 +135,10 @@ function renderSnap(filter='all'){
  activeWorks=allFeedWorks().filter(x=>filter==='all'||x.cat===filter);
  box.innerHTML=activeWorks.length?activeWorks.map((x,visibleIndex)=>{const m=masters[x.master];if(!m)return'';return `<button class="works-grid-item" onclick="openWorksViewer(${visibleIndex})" aria-label="Работа ${secondaryEsc(m.name)}"><img src="${secondaryEsc(x.photo)}" alt="Работа ${secondaryEsc(m.name)}" loading="lazy"></button>`}).join(''):`<div class="favorite-page-empty" style="grid-column:1/-1"><span>✦</span><h2>Пока нет работ</h2><p>Работы опубликованных мастеров появятся здесь.</p></div>`;
 }
-function openWorksViewer(index){
+function openWorksViewer(index,sourceWorks){
  const viewer=document.getElementById('worksViewer'),list=document.getElementById('worksViewerList'); if(!viewer||!list)return;
- list.innerHTML=activeWorks.map((x)=>{
+ const viewerWorks=Array.isArray(sourceWorks)?sourceWorks:activeWorks;
+ list.innerHTML=viewerWorks.map((x)=>{
   const m=masters[x.master],k=workFavKey(x),saved=isWorkSaved(x.workId);if(!m)return '';
   return `<article class="works-viewer-slide">
   <img class="works-viewer-photo" src="${secondaryEsc(x.photo)}" alt="Работа ${secondaryEsc(m.name)}">
@@ -150,12 +151,18 @@ function openWorksViewer(index){
  requestAnimationFrame(()=>{const slide=list.children[index];slide?.scrollIntoView({block:'start'});});
 }
 function closeWorksViewer(){const viewer=document.getElementById('worksViewer');viewer?.classList.remove('open');viewer?.setAttribute('aria-hidden','true');document.body.classList.remove('viewer-open')}
+function openFavoriteWork(workId){
+ const id=String(workId||'');if(!id)return;
+ const feed=allFeedWorks(),favoriteWorks=getFavWorks().map(k=>feed.find(w=>workFavKey(w)===k)).filter(Boolean);
+ const index=favoriteWorks.findIndex(w=>String(w.workId||'')===id);if(index<0)return;
+ openWorksViewer(index,favoriteWorks);
+}
 function renderFavorites(tab='masters'){
  const box=document.getElementById('favoritePageContent');if(!box)return;document.querySelectorAll('[data-fav-tab]').forEach(b=>b.classList.toggle('active',b.dataset.favTab===tab));
  if(tab==='masters'){
   const ids=getFavs();box.innerHTML=ids.length?`<div class="favorite-page-list">${ids.map(i=>{const m=masters[i];return m?`<article class="favorite-page-master" onclick="openProfile(${i})"><img src="${secondaryEsc(m.avatar)}"><div><h2>${secondaryEsc(m.name)}</h2><p>${secondaryEsc(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+m.rating))}${m.experience?' · '+secondaryEsc(m.experience):''}</p><small>⌖ ${secondaryEsc(m.district)}</small></div><button onclick="event.stopPropagation();toggleMaster(${i})">♥</button></article>`:''}).join('')}</div>`:empty('Нет сохранённых мастеров','Нажмите сердечко на карточке мастера.');return;
  }
- const keys=getFavWorks(),feed=allFeedWorks();box.innerHTML=keys.length?`<div class="favorite-page-works">${keys.map(k=>{const x=feed.find(w=>workFavKey(w)===k);if(x){const m=masters[x.master];if(!m)return'';return `<article onclick="openProfile(${x.master})"><div class="fav-work-visual"><img src="${secondaryEsc(x.photo)}" alt="Работа ${secondaryEsc(m.name)}"><button onclick="event.stopPropagation();toggleWork('${k}','${secondaryEsc(x.workId||'')}',this)">♥</button></div><b>Работа мастера</b><small>${secondaryEsc(m.name)}</small></article>`}const parts=k.split(':').map(Number),m=masters[parts[0]];if(!m)return'';return `<article onclick="openProfile(${parts[0]})"><div class="fav-work-visual"><img src="${secondaryEsc(m.avatar)}"><button onclick="event.stopPropagation();toggleWork('${k}','',this)">♥</button></div><b>Работа мастера</b><small>${secondaryEsc(m.name)}</small></article>`}).join('')}</div>`:empty('Нет сохранённых работ','Сохраняйте фото работ сердечком.');
+ const keys=getFavWorks(),feed=allFeedWorks();box.innerHTML=keys.length?`<div class="favorite-page-works">${keys.map(k=>{const x=feed.find(w=>workFavKey(w)===k);if(x){const m=masters[x.master];if(!m)return'';return `<article onclick="openFavoriteWork('${secondaryEsc(x.workId||'')}')"><div class="fav-work-visual"><img src="${secondaryEsc(x.photo)}" alt="Работа ${secondaryEsc(m.name)}"><button onclick="event.stopPropagation();toggleWork('${k}','${secondaryEsc(x.workId||'')}',this)">♥</button></div><b>Работа мастера</b><small>${secondaryEsc(m.name)}</small></article>`}const parts=k.split(':').map(Number),m=masters[parts[0]];if(!m)return'';return `<article onclick="openProfile(${parts[0]})"><div class="fav-work-visual"><img src="${secondaryEsc(m.avatar)}"><button onclick="event.stopPropagation();toggleWork('${k}','',this)">♥</button></div><b>Работа мастера</b><small>${secondaryEsc(m.name)}</small></article>`}).join('')}</div>`:empty('Нет сохранённых работ','Сохраняйте фото работ сердечком.');
 }
 function empty(h,p){return `<div class="favorite-page-empty"><span>♡</span><h2>${h}</h2><p>${p}</p></div>`}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderSnap(b.dataset.filter)});

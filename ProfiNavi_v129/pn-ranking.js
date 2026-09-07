@@ -67,7 +67,8 @@
     const id=Number(profile.legacy_id);
     if(!Number.isInteger(id)||id<0)return null;
     const cats=(profile.categories||[]).map(x=>categoryMap[x]||x).filter(Boolean);
-    const cat=cats[0]||'nails',sv=services.map(normalizeService),gallery=works.map(x=>x.image_url).filter(Boolean);
+    const workItems=(works||[]).filter(x=>x?.image_url).map(x=>({id:x.id,image_url:x.image_url,caption:x.caption||'',sort_order:Number(x.sort_order)||0,created_at:x.created_at,likesCount:Number(x.likes_count)||0}));
+    const cat=cats[0]||'nails',sv=services.map(normalizeService),gallery=workItems.map(x=>x.image_url);
     const avatar=profile.avatar_url||gallery[0]||'assets/service-placeholder.svg';
     const price=sv[0]?.price||'0 сом';
     const priceValue=Number.parseInt(String(price).replace(/\D/g,''),10)||0;
@@ -84,7 +85,7 @@
       city:profile.city||'Бишкек',district:[profile.area,profile.address].filter(Boolean).join(' · ')||profile.city||'Бишкек',area:profile.area||'',address:profile.address||'',walk:'на месте',
       price,priceValue,available,slotMap,slotIntervals,slotIsoMap,scheduleStep,rating:Number(profile.rating)||0,reviewsCount:Number(profile.reviews_count)||0,ratingConfidence:Number(profile.rating_confidence)||0,topScore:Number(profile.top_score)||0,
       createdAt:profile.created_at,isNew:ageDays(profile.created_at)<30,experience:profile.experience_text||'',saves:Number(profile.saves_count)||0,emoji:emojiMap[cat]||'✦',avatar,
-      desc:profile.bio||'',about:profile.bio||'',lat:Number(profile.latitude)||42.8746,lng:Number(profile.longitude)||74.5698,bookingDays:60,services:sv.length?sv:[{name:'Услуга',desc:'',price:'0 сом',time:''}],gallery:gallery.length?gallery:[avatar],works:gallery,cover:profile.cover_url||gallery[0]||avatar,strengths:profile.strengths_tags||[],payment:profile.payment||'',locationInfo:profile.location_info||'',scheduleType:profile.schedule_config?.days||'Ежедневно',workDays:profile.schedule_config?.workDays||[],openTime:profile.schedule_config?.start||'10:00',closeTime:profile.schedule_config?.end||'19:00',
+      desc:profile.bio||'',about:profile.bio||'',lat:Number(profile.latitude)||42.8746,lng:Number(profile.longitude)||74.5698,bookingDays:60,services:sv.length?sv:[{name:'Услуга',desc:'',price:'0 сом',time:''}],gallery:gallery.length?gallery:[avatar],works:gallery,workItems,cover:profile.cover_url||gallery[0]||avatar,strengths:profile.strengths_tags||[],payment:profile.payment||'',locationInfo:profile.location_info||'',scheduleType:profile.schedule_config?.days||'Ежедневно',workDays:profile.schedule_config?.workDays||[],openTime:profile.schedule_config?.start||'10:00',closeTime:profile.schedule_config?.end||'19:00',
       is_published:!!profile.is_published,rankingBreakdown:profile.ranking_breakdown||{}
     };
   }

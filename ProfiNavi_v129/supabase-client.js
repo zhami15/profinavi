@@ -206,7 +206,10 @@ window.PNData={
   if(fc.error)console.warn('Save counts unavailable:',fc.error.message||fc.error);
   const counts=fc.error?[]:(fc.data||[]);
   const countByLegacy=Object.fromEntries(counts.map(x=>[Number(x.legacy_master_id),Number(x.saves_count)||0]));
-  const services=sv.data||[],works=wo.data||[],slots=sl.data||[];
+  const services=sv.data||[],rawWorks=wo.data||[],slots=sl.data||[];
+  let workCountById={};
+  if(rawWorks.length){const wc=await pnSupabase.from('work_like_counts').select('work_id,likes_count').in('work_id',rawWorks.map(x=>x.id));if(wc.error)console.warn('Work like counts unavailable:',wc.error.message||wc.error);else workCountById=Object.fromEntries((wc.data||[]).map(x=>[x.work_id,Number(x.likes_count)||0]))}
+  const works=rawWorks.map(x=>({...x,likes_count:workCountById[x.id]||0}));
   return profiles.map(profile=>({profile:{...profile,saves_count:countByLegacy[Number(profile.legacy_id)]||0},services:services.filter(x=>x.master_id===profile.user_id),works:works.filter(x=>x.master_id===profile.user_id),slots:slots.filter(x=>x.master_id===profile.user_id)}));
  },
  async loadPublicMasterBundle(legacyId){
@@ -222,7 +225,9 @@ window.PNData={
    pnSupabase.from('master_save_counts').select('saves_count').eq('legacy_master_id',id).maybeSingle()
   ]);for(const r of [services,works,reviews,slots])if(r.error)throw r.error;
   if(count.error)console.warn('Save count unavailable:',count.error.message||count.error);
-  return {profile:{...profile,saves_count:count.error?0:(Number(count.data?.saves_count)||0)},services:services.data||[],works:works.data||[],reviews:reviews.data||[],slots:slots.data||[]};
+  const rawWorks=works.data||[];let workCountById={};
+  if(rawWorks.length){const wc=await pnSupabase.from('work_like_counts').select('work_id,likes_count').in('work_id',rawWorks.map(x=>x.id));if(wc.error)console.warn('Work like counts unavailable:',wc.error.message||wc.error);else workCountById=Object.fromEntries((wc.data||[]).map(x=>[x.work_id,Number(x.likes_count)||0]))}
+  return {profile:{...profile,saves_count:count.error?0:(Number(count.data?.saves_count)||0)},services:services.data||[],works:rawWorks.map(x=>({...x,likes_count:workCountById[x.id]||0})),reviews:reviews.data||[],slots:slots.data||[]};
  }
 };
 
@@ -281,9 +286,25 @@ Object.assign(window.PNData,{
  },
  async replaceMasterWorks(urls){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;
-  const {error:d}=await pnSupabase.from('works').delete().eq('master_id',uid);if(d)throw d;
-  const rows=(urls||[]).filter(x=>String(x||'').startsWith('http')).map((url,i)=>({master_id:uid,image_url:url,sort_order:i}));
-  if(!rows.length)return[];const {data,error}=await pnSupabase.from('works').insert(rows).select();if(error)throw error;return data||[];
+  const desired=(urls||[]).filter(x=>String(x||'').startsWith('http'));
+  const {data:existing,error:readError}=await pnSupabase.from('works').select('id,image_url,sort_order').eq('master_id',uid).order('sort_order');if(readError)throw readError;
+  const byUrl=new Map();(existing||[]).forEach(row=>{const a=byUrl.get(row.image_url)||[];a.push(row);byUrl.set(row.image_url,a)});
+  const kept=[],inserted=[];
+  for(let i=0;i<desired.length;i++){
+   const url=desired[i],pool=byUrl.get(url)||[],row=pool.shift();
+   if(row){kept.push(row.id);if(Number(row.sort_order)!==i){const {error}=await pnSupabase.from('works').update({sort_order:i}).eq('id',row.id).eq('master_id',uid);if(error)throw error}}
+   else{const {data,error}=await pnSupabase.from('works').insert({master_id:uid,image_url:url,sort_order:i}).select('id,image_url,sort_order').single();if(error)throw error;inserted.push(data)}
+  }
+  const remove=(existing||[]).filter(row=>!kept.includes(row.id)).map(row=>row.id);
+  if(remove.length){const {error}=await pnSupabase.from('works').delete().eq('master_id',uid).in('id',remove);if(error)throw error}
+  const {data,error}=await pnSupabase.from('works').select('*').eq('master_id',uid).order('sort_order');if(error)throw error;return data||inserted;
+ },
+ async addMasterWork(imageUrl){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id,url=String(imageUrl||'');
+  if(!url.startsWith('http'))throw new Error('Некорректное изображение');
+  const top=await pnSupabase.from('works').select('sort_order').eq('master_id',uid).order('sort_order',{ascending:true}).limit(1);if(top.error)throw top.error;
+  const sortOrder=(top.data||[]).length?(Number(top.data[0].sort_order)||0)-1:0;
+  const {data,error}=await pnSupabase.from('works').insert({master_id:uid,image_url:url,sort_order:sortOrder}).select('*').single();if(error)throw error;return data;
  },
  async replaceAvailability(slotMap){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;const today=new Date();today.setHours(0,0,0,0);
@@ -348,6 +369,14 @@ Object.assign(window.PNData,{
   const lastRead=readRes.data?.last_read_at||'1970-01-01T00:00:00.000Z';
   const countRes=await pnSupabase.from('support_messages').select('id',{count:'exact',head:true}).eq('thread_id',thread.id).neq('sender_id',user.id).gt('created_at',lastRead);if(countRes.error)throw countRes.error;
   return{thread,lastMessage:(lastRes.data||[])[0]||null,unreadCount:Number(countRes.count||0)};
+ },
+ async listMyWorkLikes(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('work_likes').select('work_id').eq('client_id',user.id);if(error)throw error;return(data||[]).map(x=>String(x.work_id))},
+ async setWorkLike(workId,on){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');const id=String(workId||'');if(!id)throw new Error('Работа не найдена');
+  if(on){const {error}=await pnSupabase.from('work_likes').upsert({client_id:user.id,work_id:id},{onConflict:'client_id,work_id'});if(error)throw error}
+  else{const {error}=await pnSupabase.from('work_likes').delete().eq('client_id',user.id).eq('work_id',id);if(error)throw error}
+  const count=await pnSupabase.from('work_like_counts').select('likes_count').eq('work_id',id).maybeSingle();if(count.error)throw count.error;
+  return{saved:!!on,likesCount:Number(count.data?.likes_count)||0};
  },
  async listLegacyFavorites(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('legacy_favorites').select('legacy_master_id').eq('client_id',user.id);if(error)throw error;return(data||[]).map(x=>Number(x.legacy_master_id))},
  async setLegacyFavorite(id,on){

@@ -373,7 +373,7 @@ Object.assign(window.PNData,{
  async listMyWorkLikes(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('work_likes').select('work_id').eq('client_id',user.id);if(error)throw error;return(data||[]).map(x=>String(x.work_id))},
  async setWorkLike(workId,on){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');const id=String(workId||'');if(!id)throw new Error('Работа не найдена');
-  if(on){const {error}=await pnSupabase.from('work_likes').upsert({client_id:user.id,work_id:id},{onConflict:'client_id,work_id'});if(error)throw error}
+  if(on){const {error}=await pnSupabase.from('work_likes').insert({client_id:user.id,work_id:id});if(error&&error.code!=='23505')throw error}
   else{const {error}=await pnSupabase.from('work_likes').delete().eq('client_id',user.id).eq('work_id',id);if(error)throw error}
   const count=await pnSupabase.from('work_like_counts').select('likes_count').eq('work_id',id).maybeSingle();if(count.error)throw count.error;
   return{saved:!!on,likesCount:Number(count.data?.likes_count)||0};

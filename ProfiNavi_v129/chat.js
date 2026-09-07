@@ -21,7 +21,7 @@ async function hydrateChats(){
  if(!window.PNData||!window.PNAuth)return;const u=await PNAuth.currentUser();if(!u)return;
  const cs=await PNData.listConversations(),cache=getChats(),allowed=new Set(cs.map(c=>String(c.booking_id)));
  getBookings().filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);
- for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(msg=>({from:msg.sender_id===u.id?'client':'master',text:msg.body,ts:new Date(msg.created_at).getTime(),kind:msg.is_system?'system':undefined,conversationId:c.id}))}
+ for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(msg=>({from:msg.sender_id===u.id?'client':'master',text:msg.body,imageUrl:msg.image_url||null,imagePath:msg.image_path||null,ts:new Date(msg.created_at).getTime(),kind:msg.is_system?'system':undefined,conversationId:c.id}))}
  saveChats(cache);
 }
 function resolveMaster(){
@@ -44,22 +44,27 @@ function render(){
  if(!booking)return;const box=document.getElementById('chatPageMessages');if(!box)return;
  document.querySelector('.chat-screen-head p').textContent=statusText();
  const closed=isChatClosed(booking),msgs=messages();
- box.innerHTML=(msgs.length?'<div class="chat-date">Переписка</div>'+msgs.map(msg=>`<div class="chat-row ${msg.from==='master'?'master':'user'}"><div class="chat-bubble">${chatEsc(msg.text)}<div class="chat-time">${msg.ts?new Date(msg.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`).join(''):'<div class="chat-empty-state"><h2>Начните переписку</h2></div>')+(closed?`<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>${['cancelled','declined'].includes(booking.status)?'Запись отменена. Новые сообщения отправлять нельзя.':'Прошло 72 часа после времени записи. Новые сообщения отправлять нельзя.'}</p></div>`:'');
+ box.innerHTML=(msgs.length?'<div class="chat-date">Переписка</div>'+msgs.map(msg=>`<div class="chat-row ${msg.from==='master'?'master':'user'}"><div class="chat-bubble">${msg.imageUrl?`<a class="chat-image-link" href="${chatEsc(msg.imageUrl)}" target="_blank" rel="noopener"><img class="chat-message-image" src="${chatEsc(msg.imageUrl)}" alt="Фото в чате"></a>`:''}${msg.text?`<div class="chat-message-text">${chatEsc(msg.text)}</div>`:''}<div class="chat-time">${msg.ts?new Date(msg.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`).join(''):'<div class="chat-empty-state"><h2>Начните переписку</h2></div>')+(closed?`<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>${['cancelled','declined'].includes(booking.status)?'Запись отменена. Новые сообщения отправлять нельзя.':'Прошло 72 часа после времени записи. Новые сообщения отправлять нельзя.'}</p></div>`:'');
  const form=document.getElementById('chatPageForm'),input=document.getElementById('chatPageInput'),button=form?.querySelector('button');
- if(input&&button&&form){input.disabled=closed;button.disabled=closed;input.placeholder=closed?'Чат закрыт':'Сообщение…';form.classList.toggle('is-disabled',closed)}
+ if(input&&button&&form){input.disabled=closed;button.disabled=closed;input.placeholder=closed?'Чат закрыт':'Сообщение…';form.classList.toggle('is-disabled',closed);const attach=document.getElementById('chatPageAttach');if(attach)attach.disabled=closed}
  box.scrollTop=box.scrollHeight;
 }
-async function send(text){
- if(isChatClosed(booking))return;const value=String(text||'').trim();if(!value)return;
- if(booking.syncedToSupabase&&window.PNData){const cs=await PNData.listConversations(),c=cs.find(x=>String(x.booking_id)===String(booking.id));if(!c)throw new Error('Чат ещё не открыт мастером');await PNData.sendMessage(c.id,value);await hydrateChats()}
- else{const all=getChats();all[key]=all[key]||[];all[key].push({from:'client',text:value,ts:Date.now(),kind:'message'});saveChats(all)}
+async function send(text,imageFile=null){
+ if(isChatClosed(booking))return;const value=String(text||'').trim();if(!value&&!imageFile)return;
+ if(booking.syncedToSupabase&&window.PNData){const cs=await PNData.listConversations(),c=cs.find(x=>String(x.booking_id)===String(booking.id));if(!c)throw new Error('Чат ещё не открыт мастером');await PNData.sendMessage(c.id,value,imageFile);await hydrateChats()}
+ else{if(imageFile)throw new Error('Фото можно отправить после синхронизации записи');const all=getChats();all[key]=all[key]||[];all[key].push({from:'client',text:value,ts:Date.now(),kind:'message'});saveChats(all)}
 }
 async function boot(){
  await hydrateBookings();booking=getBookings().find((b,i)=>String(b.id||i)===String(bookingId))||null;
  if(!booking||booking.status==='pending'){location.replace('chats.html');return}
  key=String(booking.id);m=resolveMaster();document.getElementById('chatPageAvatar').src=m.avatar||'icon-192.png';document.getElementById('chatPageName').textContent=m.name||'Мастер ProfiNavi';
  await hydrateChats();await markClientRead();render();
- const form=document.getElementById('chatPageForm');if(form)form.onsubmit=async e=>{e.preventDefault();const input=document.getElementById('chatPageInput'),text=input.value.trim();if(!text)return;try{await send(text);input.value='';render()}catch(err){alert('Не удалось отправить сообщение: '+err.message)}};
+ const form=document.getElementById('chatPageForm'),fileInput=document.getElementById('chatPageFile'),attach=document.getElementById('chatPageAttach'),preview=document.getElementById('chatPagePreview'),previewImg=document.getElementById('chatPagePreviewImg'),previewName=document.getElementById('chatPagePreviewName'),remove=document.getElementById('chatPagePreviewRemove');let selectedFile=null,previewUrl='';
+ const clearSelected=()=>{selectedFile=null;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl='';if(fileInput)fileInput.value='';preview?.classList.remove('show');if(previewImg)previewImg.removeAttribute('src');if(previewName)previewName.textContent=''};
+ if(attach&&fileInput)attach.onclick=()=>fileInput.click();
+ if(fileInput)fileInput.onchange=()=>{const f=fileInput.files?.[0]||null;if(!f){clearSelected();return}try{pnValidateImageFile(f)}catch(err){alert(err.message);clearSelected();return}selectedFile=f;previewUrl=URL.createObjectURL(f);if(previewImg)previewImg.src=previewUrl;if(previewName)previewName.textContent=f.name||'Фото';preview?.classList.add('show')};
+ if(remove)remove.onclick=clearSelected;
+ if(form)form.onsubmit=async e=>{e.preventDefault();const input=document.getElementById('chatPageInput'),text=input.value.trim();if(!text&&!selectedFile)return;const btn=form.querySelector('.chat-send-btn');try{if(btn)btn.disabled=true;if(attach)attach.disabled=true;await send(text,selectedFile);input.value='';clearSelected();render()}catch(err){alert('Не удалось отправить сообщение: '+err.message)}finally{if(btn)btn.disabled=isChatClosed(booking);if(attach)attach.disabled=isChatClosed(booking)}};
  window.addEventListener('storage',e=>{if(['pn_chats','pn_bookings'].includes(e.key))boot().catch(()=>{})});
  window.PNRealtime?.watchClient?.(async()=>{try{await hydrateBookings();booking=getBookings().find((b,i)=>String(b.id||i)===String(bookingId))||booking;await hydrateChats();render()}catch(e){}});
 }

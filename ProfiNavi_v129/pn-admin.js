@@ -114,9 +114,16 @@
   async function loadSupportThread(threadId){
     const u=await ensureRole();const th=await sb.from('support_threads').select('*').eq('id',threadId).maybeSingle();if(th.error)throw th.error;if(!th.data)throw new Error('Диалог поддержки не найден');
     const [pr,ms]=await Promise.all([sb.from('profiles').select('id,name,phone,role').eq('id',th.data.user_id).maybeSingle(),sb.from('support_messages').select('*').eq('thread_id',threadId).order('created_at')]);if(pr.error)throw pr.error;if(ms.error)throw ms.error;
-    return{thread:th.data,contact:pr.data||null,messages:ms.data||[],admin:u};
+    const signed=window.PNChatMedia?await PNChatMedia.signRows(ms.data||[]):(ms.data||[]);
+    return{thread:th.data,contact:pr.data||null,messages:signed,admin:u};
   }
-  async function sendSupportMessage(threadId,body){const u=await ensureRole();const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');const r=await sb.from('support_messages').insert({thread_id:threadId,sender_id:u.id,body:text}).select().single();if(r.error)throw r.error;return r.data}
+  async function sendSupportMessage(threadId,body,imageFile=null){
+    const u=await ensureRole();const text=String(body||'').trim();if(!text&&!imageFile)throw new Error('Введите сообщение или выберите фото');if(text.length>5000)throw new Error('Сообщение слишком длинное');
+    let imagePath=null;try{
+      if(imageFile){if(!window.PNChatMedia)throw new Error('Хранилище фото не загрузилось');imagePath=await PNChatMedia.upload('support',threadId,imageFile)}
+      const r=await sb.from('support_messages').insert({thread_id:threadId,sender_id:u.id,body:text,image_path:imagePath}).select().single();if(r.error)throw r.error;return r.data;
+    }catch(e){if(imagePath&&window.PNChatMedia)await PNChatMedia.remove(imagePath);throw e}
+  }
   async function markSupportRead(threadId){const u=await ensureRole();const r=await sb.from('support_reads').upsert({thread_id:threadId,user_id:u.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(r.error)throw r.error}
   async function listHomeBanners(){
     await ensureRole();

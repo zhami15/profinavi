@@ -9,9 +9,9 @@ function expired(b){const dt=bookingEndAt(b);return dt?Date.now()>=dt.getTime()+
 let supportState={loggedIn:false,loaded:false,lastMessage:null,unreadCount:0};
 function supportRow(){
  const href=supportState.loggedIn?'support-chat.html?return=chats.html':`client-login.html?return=${encodeURIComponent('support-chat.html?return=chats.html')}`;
- const last=supportState.lastMessage?.body||'Напишите нам, если возник вопрос или проблема';
+ const last=supportState.lastMessage?.body||(supportState.lastMessage?.image_path?'Фото':'Напишите нам, если возник вопрос или проблема');
  const unread=supportState.unreadCount>0;
- return `<a class="chat-list-item support-list-item ${unread?'is-unread':''}" href="${href}"><div class="support-list-avatar"><img src="icon-192.png" alt="ProfiNavi"></div><div class="chat-list-text"><div class="chat-list-row"><h2>Техническая поддержка</h2><div class="chat-list-meta">${unread?'<b class="chat-unread-badge">1</b>':''}</div></div><p>${esc(last)}</p><span class="chat-list-status">ProfiNavi · помощь по работе сервиса</span></div></a>`;
+ return `<a class="chat-list-item support-list-item ${unread?'is-unread':''}" href="${href}"><div class="support-list-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13v-2a7 7 0 0 1 14 0v2"/><path d="M5 12H4a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v-7Z"/><path d="M19 12h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2v-7Z"/><path d="M18 19c-1 2-3 3-6 3"/><circle cx="11" cy="22" r="1"/></svg></div><div class="chat-list-text"><div class="chat-list-row"><h2>Техническая поддержка</h2><div class="chat-list-meta">${unread?'<b class="chat-unread-badge">1</b>':''}</div></div><p>${esc(last)}</p><span class="chat-list-status">ProfiNavi · помощь по работе сервиса</span></div></a>`;
 }
 function renderClientChatList(){
  const chats=getChats(),reads=getRead(),box=document.getElementById('chatList');
@@ -21,7 +21,7 @@ function renderClientChatList(){
    const key=String(b.id||i),msgs=chats[key]||[],last=msgs[msgs.length-1],lastMaster=[...msgs].reverse().find(x=>x.from==='master');
    const unread=!!(lastMaster&&Number(lastMaster.ts||0)>Number(reads[key]||0));
    const status=expired(b)?'Чат закрыт':b.status==='completed'||b.status==='done'?'Запись завершена':b.status==='confirmed'?'Запись подтверждена':b.status==='cancelled'?'Запись отменена':'Ожидает подтверждения';
-   return `<a class="chat-list-item ${unread?'is-unread':''}" href="chat.html?master=${encodeURIComponent(b.master||0)}&booking=${encodeURIComponent(key)}"><img src="${esc(m.avatar||'icon-192.png')}" alt="${esc(m.name)}"><div class="chat-list-text"><div class="chat-list-row"><h2>${esc(m.name)}</h2><div class="chat-list-meta">${unread?'<b class="chat-unread-badge">1</b>':''}</div></div><p>${esc(last?.text||`Запись на ${b.service||'услугу'}`)}</p><span class="chat-list-status">${esc(status)}</span></div></a>`;
+   return `<a class="chat-list-item ${unread?'is-unread':''}" href="chat.html?master=${encodeURIComponent(b.master||0)}&booking=${encodeURIComponent(key)}"><img src="${esc(m.avatar||'icon-192.png')}" alt="${esc(m.name)}"><div class="chat-list-text"><div class="chat-list-row"><h2>${esc(m.name)}</h2><div class="chat-list-meta">${unread?'<b class="chat-unread-badge">1</b>':''}</div></div><p>${esc(last?.text||(last?.imageUrl?'Фото':`Запись на ${b.service||'услугу'}`))}</p><span class="chat-list-status">${esc(status)}</span></div></a>`;
  }).join('');
  box.innerHTML=supportRow()+bookingHtml+(!bookings.length?'<div class="chat-list-hint">Диалоги с мастерами появятся здесь после подтверждения записи.</div>':'');
 }
@@ -36,7 +36,7 @@ async function pnHydrateChatsFromBackend(){
  if(!window.PNData||!window.PNAuth)return;const u=await PNAuth.currentUser();if(!u)return;
  const cs=await PNData.listConversations(),cache=JSON.parse(localStorage.getItem('pn_chats')||'{}'),allowed=new Set(cs.map(c=>String(c.booking_id)));
  getBookings().filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);
- for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'client':'master',text:m.body,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}
+ for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'client':'master',text:m.body,imageUrl:m.image_url||null,imagePath:m.image_path||null,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}
  localStorage.setItem('pn_chats',JSON.stringify(cache));renderClientChatList();
 }
 renderClientChatList();

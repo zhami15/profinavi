@@ -52,6 +52,30 @@ async function pnUploadImage(bucket,file,kind='image'){
  return publicUrl;
 }
 
+async function pnUploadChatMedia(scope,threadId,file){
+ pnValidateImageFile(file);
+ const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');
+ const safeScope=scope==='support'?'support':'conversation';
+ const id=String(threadId||'').trim();if(!id)throw new Error('Диалог не найден');
+ const ext=(file.name?.split('.').pop()||file.type?.split('/').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+ const path=`${safeScope}/${id}/${user.id}/${crypto.randomUUID()}.${ext}`;
+ const {error}=await pnSupabase.storage.from('chat-media').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type||undefined});if(error)throw error;
+ return path;
+}
+async function pnSignChatMediaRows(rows){
+ const list=Array.isArray(rows)?rows:[];
+ const paths=[...new Set(list.map(x=>x?.image_path).filter(Boolean))];
+ if(!paths.length)return list.map(x=>({...x,image_url:null}));
+ const {data,error}=await pnSupabase.storage.from('chat-media').createSignedUrls(paths,3600);if(error)throw error;
+ const byPath={};paths.forEach((p,i)=>{const item=data?.[i]||{};byPath[p]=item.signedUrl||item.signedURL||null});
+ return list.map(x=>({...x,image_url:x?.image_path?byPath[x.image_path]||null:null}));
+}
+async function pnRemoveChatMedia(path){
+ if(!path)return;
+ try{await pnSupabase.storage.from('chat-media').remove([path])}catch(e){}
+}
+window.PNChatMedia={upload:pnUploadChatMedia,signRows:pnSignChatMediaRows,remove:pnRemoveChatMedia};
+
 window.PNAuth={
  async currentUser(){
   if(!window.pnSupabase)return null;
@@ -336,8 +360,15 @@ Object.assign(window.PNData,{
  },
  async listMasterBookings(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('bookings').select('*').eq('master_id',user.id).order('starts_at');if(error)throw error;return data||[]},
  async listConversations(){const user=await PNAuth.currentUser();if(!user)return[];const {data,error}=await pnSupabase.from('conversations').select('*').or(`client_id.eq.${user.id},master_id.eq.${user.id}`).order('created_at',{ascending:false});if(error)throw error;return data||[]},
- async listMessages(id){const {data,error}=await pnSupabase.from('messages').select('*').eq('conversation_id',id).order('created_at');if(error)throw error;return data||[]},
- async sendMessage(id,body){const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');const {data,error}=await pnSupabase.from('messages').insert({conversation_id:id,sender_id:user.id,body:text}).select().single();if(error)throw error;return data},
+ async listMessages(id){const {data,error}=await pnSupabase.from('messages').select('*').eq('conversation_id',id).order('created_at');if(error)throw error;return pnSignChatMediaRows(data||[])},
+ async sendMessage(id,body,imageFile=null){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const text=String(body||'').trim();if(!text&&!imageFile)throw new Error('Введите сообщение или выберите фото');
+  let imagePath=null;try{
+   if(imageFile)imagePath=await pnUploadChatMedia('conversation',id,imageFile);
+   const {data,error}=await pnSupabase.from('messages').insert({conversation_id:id,sender_id:user.id,body:text,image_path:imagePath}).select().single();if(error)throw error;
+   return (await pnSignChatMediaRows([data]))[0];
+  }catch(e){if(imagePath)await pnRemoveChatMedia(imagePath);throw e}
+ },
  async markConversationRead(id){const user=await PNAuth.currentUser();if(!user)return;const {error}=await pnSupabase.from('conversation_reads').upsert({conversation_id:id,user_id:user.id,last_read_at:new Date().toISOString()},{onConflict:'conversation_id,user_id'});if(error)throw error},
  async getSupportThread(create=false){
   const user=await PNAuth.currentUser();if(!user)return null;
@@ -351,11 +382,15 @@ Object.assign(window.PNData,{
   return created.data;
  },
  async listSupportMessages(threadId){
-  if(!threadId)return[];const {data,error}=await pnSupabase.from('support_messages').select('*').eq('thread_id',threadId).order('created_at');if(error)throw error;return data||[];
+  if(!threadId)return[];const {data,error}=await pnSupabase.from('support_messages').select('*').eq('thread_id',threadId).order('created_at');if(error)throw error;return pnSignChatMediaRows(data||[]);
  },
- async sendSupportMessage(threadId,body){
-  const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');const text=String(body||'').trim();if(!text)throw new Error('Введите сообщение');if(text.length>5000)throw new Error('Сообщение слишком длинное');
-  const {data,error}=await pnSupabase.from('support_messages').insert({thread_id:threadId,sender_id:user.id,body:text}).select().single();if(error)throw error;return data;
+ async sendSupportMessage(threadId,body,imageFile=null){
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Войдите в аккаунт');const text=String(body||'').trim();if(!text&&!imageFile)throw new Error('Введите сообщение или выберите фото');if(text.length>5000)throw new Error('Сообщение слишком длинное');
+  let imagePath=null;try{
+   if(imageFile)imagePath=await pnUploadChatMedia('support',threadId,imageFile);
+   const {data,error}=await pnSupabase.from('support_messages').insert({thread_id:threadId,sender_id:user.id,body:text,image_path:imagePath}).select().single();if(error)throw error;
+   return (await pnSignChatMediaRows([data]))[0];
+  }catch(e){if(imagePath)await pnRemoveChatMedia(imagePath);throw e}
  },
  async markSupportRead(threadId){
   const user=await PNAuth.currentUser();if(!user||!threadId)return;const {error}=await pnSupabase.from('support_reads').upsert({thread_id:threadId,user_id:user.id,last_read_at:new Date().toISOString()},{onConflict:'thread_id,user_id'});if(error)throw error;
@@ -428,7 +463,7 @@ window.PNBackendSync={
   const u=await PNAuth.currentUser();if(!u)return{};
   const cs=await PNData.listConversations(),cache=JSON.parse(localStorage.getItem('pn_chats')||'{}'),allowed=new Set(cs.map(c=>String(c.booking_id)));
   const bookings=JSON.parse(localStorage.getItem('pn_bookings')||'[]');(Array.isArray(bookings)?bookings:[]).filter(b=>b.syncedToSupabase&&!allowed.has(String(b.id))).forEach(b=>delete cache[String(b.id)]);
-  for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'master':'client',text:m.body,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}
+  for(const c of cs){const ms=await PNData.listMessages(c.id);cache[String(c.booking_id)]=ms.map(m=>({from:m.sender_id===u.id?'master':'client',text:m.body,imageUrl:m.image_url||null,imagePath:m.image_path||null,ts:new Date(m.created_at).getTime(),kind:m.is_system?'system':undefined,conversationId:c.id}))}
   localStorage.setItem('pn_chats',JSON.stringify(cache));return cache;
  },
  async hydrateClientFavorites(){try{const ids=await PNData.listLegacyFavorites();localStorage.setItem('pn_favs',JSON.stringify(ids));return ids}catch(e){return[]}}

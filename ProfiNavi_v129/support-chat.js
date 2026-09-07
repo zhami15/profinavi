@@ -1,7 +1,7 @@
 (()=>{
  const q=new URLSearchParams(location.search),returnTo=window.PNSafeReturnPath?PNSafeReturnPath(q.get('return'),'chats.html'):'chats.html';
- const box=document.getElementById('supportMessages'),form=document.getElementById('supportForm'),input=document.getElementById('supportInput');
- let user=null,thread=null,channel=null;
+ const box=document.getElementById('supportMessages'),form=document.getElementById('supportForm'),input=document.getElementById('supportInput'),fileInput=document.getElementById('supportFile'),attach=document.getElementById('supportAttach'),preview=document.getElementById('supportPreview'),previewImg=document.getElementById('supportPreviewImg'),previewName=document.getElementById('supportPreviewName'),remove=document.getElementById('supportPreviewRemove');
+ let user=null,thread=null,channel=null,selectedFile=null,previewUrl='';
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const time=v=>new Date(v).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
  document.getElementById('supportBack').onclick=()=>location.href=returnTo;
@@ -17,7 +17,7 @@
    try{
      thread=await PNData.getSupportThread(false);
      const msgs=thread?await PNData.listSupportMessages(thread.id):[];
-     box.innerHTML=msgs.length?'<div class="chat-date">Техническая поддержка</div>'+msgs.map(m=>`<div class="chat-row ${m.sender_id===user.id?'user':'master'}"><div class="chat-bubble">${esc(m.body).replace(/\n/g,'<br>')}<div class="chat-time">${time(m.created_at)}</div></div></div>`).join(''):`<div class="support-welcome"><div class="support-welcome-icon">?</div><h2>Чем можем помочь?</h2><p>Опишите проблему или вопрос. Переписку увидит администратор ProfiNavi.</p></div>`;
+     box.innerHTML=msgs.length?'<div class="chat-date">Техническая поддержка</div>'+msgs.map(m=>`<div class="chat-row ${m.sender_id===user.id?'user':'master'}"><div class="chat-bubble">${m.image_url?`<a class="chat-image-link" href="${esc(m.image_url)}" target="_blank" rel="noopener"><img class="chat-message-image" src="${esc(m.image_url)}" alt="Фото в чате"></a>`:''}${m.body?`<div class="chat-message-text">${esc(m.body).replace(/\n/g,'<br>')}</div>`:''}<div class="chat-time">${time(m.created_at)}</div></div></div>`).join(''):`<div class="support-welcome"><div class="support-welcome-icon">?</div><h2>Чем можем помочь?</h2><p>Опишите проблему или вопрос. Переписку увидит администратор ProfiNavi.</p></div>`;
      if(thread)await PNData.markSupportRead(thread.id);localStorage.setItem('pn_support_unread','0');
      requestAnimationFrame(()=>box.scrollTop=box.scrollHeight);
      if(thread)watch();
@@ -29,12 +29,16 @@
  }
  async function loadMessagesOnly(){
    if(!thread||!user)return;
-   try{const msgs=await PNData.listSupportMessages(thread.id);box.innerHTML=msgs.length?'<div class="chat-date">Техническая поддержка</div>'+msgs.map(m=>`<div class="chat-row ${m.sender_id===user.id?'user':'master'}"><div class="chat-bubble">${esc(m.body).replace(/\n/g,'<br>')}<div class="chat-time">${time(m.created_at)}</div></div></div>`).join(''):'';await PNData.markSupportRead(thread.id);localStorage.setItem('pn_support_unread','0');requestAnimationFrame(()=>box.scrollTop=box.scrollHeight)}catch(e){}
+   try{const msgs=await PNData.listSupportMessages(thread.id);box.innerHTML=msgs.length?'<div class="chat-date">Техническая поддержка</div>'+msgs.map(m=>`<div class="chat-row ${m.sender_id===user.id?'user':'master'}"><div class="chat-bubble">${m.image_url?`<a class="chat-image-link" href="${esc(m.image_url)}" target="_blank" rel="noopener"><img class="chat-message-image" src="${esc(m.image_url)}" alt="Фото в чате"></a>`:''}${m.body?`<div class="chat-message-text">${esc(m.body).replace(/\n/g,'<br>')}</div>`:''}<div class="chat-time">${time(m.created_at)}</div></div></div>`).join(''):'';await PNData.markSupportRead(thread.id);localStorage.setItem('pn_support_unread','0');requestAnimationFrame(()=>box.scrollTop=box.scrollHeight)}catch(e){}
  }
+ const clearSelected=()=>{selectedFile=null;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl='';if(fileInput)fileInput.value='';preview?.classList.remove('show');if(previewImg)previewImg.removeAttribute('src');if(previewName)previewName.textContent=''};
+ if(attach&&fileInput)attach.onclick=()=>fileInput.click();
+ if(fileInput)fileInput.onchange=()=>{const f=fileInput.files?.[0]||null;if(!f){clearSelected();return}try{pnValidateImageFile(f)}catch(err){alert(err.message);clearSelected();return}selectedFile=f;previewUrl=URL.createObjectURL(f);previewImg.src=previewUrl;previewName.textContent=f.name||'Фото';preview.classList.add('show')};
+ if(remove)remove.onclick=clearSelected;
  form.onsubmit=async e=>{
-   e.preventDefault();const text=input.value.trim();if(!text)return;
-   const btn=form.querySelector('button');btn.disabled=true;input.disabled=true;
-   try{if(!thread){thread=await PNData.getSupportThread(true);if(!thread)throw new Error('Не удалось создать обращение');watch()}await PNData.sendSupportMessage(thread.id,text);input.value='';await loadMessagesOnly()}catch(err){alert('Не удалось отправить сообщение: '+err.message)}finally{btn.disabled=false;input.disabled=false;input.focus()}
+   e.preventDefault();const text=input.value.trim();if(!text&&!selectedFile)return;
+   const btn=form.querySelector('.chat-send-btn');btn.disabled=true;attach.disabled=true;input.disabled=true;
+   try{if(!thread){thread=await PNData.getSupportThread(true);if(!thread)throw new Error('Не удалось создать обращение');watch()}await PNData.sendSupportMessage(thread.id,text,selectedFile);input.value='';clearSelected();await loadMessagesOnly()}catch(err){alert('Не удалось отправить сообщение: '+err.message)}finally{btn.disabled=false;attach.disabled=false;input.disabled=false;input.focus()}
  };
  window.addEventListener('beforeunload',()=>{if(channel&&window.pnSupabase)pnSupabase.removeChannel(channel)});
  load();

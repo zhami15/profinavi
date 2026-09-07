@@ -248,9 +248,9 @@ async function pnConversationForBooking(bookingId){
  if(!window.PNData)return null;
  try{const cs=await PNData.listConversations();return cs.find(c=>String(c.booking_id)===String(bookingId))||null}catch(e){return null}
 }
-async function pnSendBookingMessage(bookingId,text){
+async function pnSendBookingMessage(bookingId,text,imageFile=null){
  const c=await pnConversationForBooking(bookingId);if(!c)return false;
- await PNData.sendMessage(c.id,text);return true;
+ await PNData.sendMessage(c.id,text,imageFile);return true;
 }
 async function pnHydrateMasterChatsFromBackend(){
  if(!window.PNBackendSync?.hydrateMasterChats)return{};
@@ -515,10 +515,11 @@ function renderBookings(){
  draw();document.querySelectorAll('#masterDays button').forEach(btn=>btn.onclick=()=>{selected=+btn.dataset.day;document.querySelectorAll('#masterDays button').forEach(x=>x.classList.toggle('active',x===btn));draw()});
 }
 
-async function sendQuickReply(id,text){
+async function sendQuickReply(id,text,imageFile=null){
  const b=getBookings().find(x=>String(x.id)===String(id));
  if(!b || masterChatClosed(b))return false;
- if(b.syncedToSupabase&&window.PNData){await pnSendBookingMessage(id,text);await pnHydrateMasterChatsFromBackend()}else pushMasterMessage(id,text,'message');
+ if(b.syncedToSupabase&&window.PNData){await pnSendBookingMessage(id,text,imageFile);await pnHydrateMasterChatsFromBackend()}
+ else{if(imageFile)throw new Error('Фото можно отправить после синхронизации записи');pushMasterMessage(id,text,'message')}
  return true;
 }
 function openChat(id){
@@ -530,6 +531,8 @@ function openChat(id){
 
  const overlay=document.createElement('div');
  overlay.className='master-chat-overlay';
+ let selectedChatFile=null,selectedChatPreviewUrl='';
+ const clearSelectedChatFile=()=>{selectedChatFile=null;if(selectedChatPreviewUrl)URL.revokeObjectURL(selectedChatPreviewUrl);selectedChatPreviewUrl=''};
 
  const draw=()=>{
    const current=getBookings().find(x=>String(x.id)===String(id))||booking;
@@ -554,7 +557,7 @@ function openChat(id){
    ${current.status==='completed'||current.status==='done'?'<div class="chat-booking-status confirmed">✓ Запись завершена</div>':current.status==='confirmed'?'<div class="chat-booking-status confirmed">✓ Запись подтверждена</div>':current.status==='cancelled'?'<div class="chat-booking-status cancelled">Запись отменена</div>':''}
 
    <div class="master-chat-thread">
-     ${msgs.length?msgs.map(msg=>`<div class="bubble ${msg.from==='master'?'mine':'incoming'}">${masterEsc(msg.text)}</div>`).join(''):'<div class="master-empty">Начните переписку</div>'}
+     ${msgs.length?msgs.map(msg=>`<div class="bubble ${msg.from==='master'?'mine':'incoming'}">${msg.imageUrl?`<a class="chat-image-link" href="${masterEsc(msg.imageUrl)}" target="_blank" rel="noopener"><img class="chat-message-image" src="${masterEsc(msg.imageUrl)}" alt="Фото в чате"></a>`:''}${msg.text?`<div class="chat-message-text">${masterEsc(msg.text)}</div>`:''}</div>`).join(''):'<div class="master-empty">Начните переписку</div>'}
      ${closed?`<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>${current.status==='cancelled'||current.status==='declined'?'Запись отменена.':'Прошло 72 часа после времени записи.'}</p></div>`:''}
    </div>
 
@@ -564,9 +567,9 @@ function openChat(id){
      <button type="button" data-reply="Можете, пожалуйста, уточнить желаемый дизайн?">Уточнить дизайн</button>
      <button type="button" data-reply="К сожалению, это время уже недоступно. Могу предложить другое.">Другое время</button>
    </div>
-   <form class="master-chat-compose" id="chatForm">
-     <input id="chatInput" placeholder="Сообщение…" autocomplete="off">
-     <button type="submit">➤</button>
+   <form class="master-chat-compose chat-media-form" id="chatForm">
+     ${selectedChatFile?`<div class="chat-file-preview show"><img src="${masterEsc(selectedChatPreviewUrl)}" alt="Выбранное фото"><span>${masterEsc(selectedChatFile.name||'Фото')}</span><button type="button" class="chat-file-remove" id="masterChatPreviewRemove">×</button></div>`:''}
+     <div class="chat-compose-row"><input type="file" id="masterChatFile" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden><button type="button" class="chat-attach-btn" id="masterChatAttach" aria-label="Добавить фото"><svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-9Z"/><circle cx="9" cy="10" r="1.5"/><path d="m6.5 16 4-4 3 3 2-2 2 3"/></svg></button><input id="chatInput" placeholder="Сообщение…" autocomplete="off"><button type="submit" class="chat-send-btn">➤</button></div>
    </form>`:''}`;
 
    overlay.querySelector('#closeChat').onclick=()=>{overlay.remove();renderChats()};
@@ -581,12 +584,15 @@ function openChat(id){
      btn.onclick=async()=>{try{await sendQuickReply(id,btn.dataset.reply);draw()}catch(e){alert('Не удалось отправить сообщение: '+e.message)}};
    });
 
-   const form=overlay.querySelector('#chatForm');
+   const form=overlay.querySelector('#chatForm'),fileInput=overlay.querySelector('#masterChatFile'),attach=overlay.querySelector('#masterChatAttach'),removeFile=overlay.querySelector('#masterChatPreviewRemove');
+   if(attach&&fileInput)attach.onclick=()=>fileInput.click();
+   if(fileInput)fileInput.onchange=()=>{const f=fileInput.files?.[0]||null;if(!f)return;try{pnValidateImageFile(f)}catch(err){alert(err.message);fileInput.value='';return}clearSelectedChatFile();selectedChatFile=f;selectedChatPreviewUrl=URL.createObjectURL(f);draw()};
+   if(removeFile)removeFile.onclick=()=>{clearSelectedChatFile();draw()};
    if(form)form.onsubmit=async e=>{
      e.preventDefault();
      const input=overlay.querySelector('#chatInput'),text=input.value.trim();
-     if(!text)return;
-     try{if(await sendQuickReply(id,text)){input.value='';draw()}}catch(err){alert('Не удалось отправить сообщение: '+err.message)}
+     if(!text&&!selectedChatFile)return;
+     const file=selectedChatFile;try{if(await sendQuickReply(id,text,file)){input.value='';clearSelectedChatFile();draw()}}catch(err){alert('Не удалось отправить сообщение: '+err.message)}
    };
 
    requestAnimationFrame(()=>{
@@ -611,11 +617,11 @@ function renderChats(){
    return new Date(b.createdAt||b.date).getTime()-new Date(a.createdAt||a.date).getTime();
  });
  const supportUnread=masterSupportState.unreadCount>0;
- const supportText=String(masterSupportState.lastMessage?.body||'Напишите нам, если возник вопрос или проблема').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const supportText=String(masterSupportState.lastMessage?.body||(masterSupportState.lastMessage?.image_path?'Фото':'Напишите нам, если возник вопрос или проблема')).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  root.innerHTML=`${masterHeader('Чаты','')}
  <section class="master-chat-list">
  <button class="master-chat-item chat-button support-master-chat ${supportUnread?'is-unread':''}" onclick="location.href='support-chat.html?return=master-chats.html'">
-   <div class="master-client-avatar support-avatar-mini"><img src="icon-192.png" alt="ProfiNavi"></div>
+   <div class="master-client-avatar support-avatar-mini" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13v-2a7 7 0 0 1 14 0v2"/><path d="M5 12H4a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v-7Z"/><path d="M19 12h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2v-7Z"/><path d="M18 19c-1 2-3 3-6 3"/><circle cx="11" cy="22" r="1"/></svg></div>
    <div><b>Техническая поддержка</b><p>${supportText}</p><small>ProfiNavi · помощь по работе сервиса</small></div>
    <span class="chat-row-end">${supportUnread?'<i class="master-unread-badge">1</i>':''}<em>›</em></span>
  </button>
@@ -625,7 +631,7 @@ function renderChats(){
      <div class="master-client-avatar">${(b.clientName||'К')[0]}</div>
      <div>
        <b>${masterEsc(b.clientName||'Клиент ProfiNavi')}</b>
-       <p>${masterEsc(last?last.text:'Нет сообщений')}</p>
+       <p>${masterEsc(last?(last.text||(last.imageUrl?'Фото':'Сообщение')):'Нет сообщений')}</p>
        <small>${masterEsc(b.service||'Услуга')} · ${masterEsc(b.time||'')}${expired?' · чат закрыт':''}</small>
      </div>
      <span class="chat-row-end">${unread?'<i class="master-unread-badge">1</i>':''}<em>›</em></span>

@@ -806,6 +806,29 @@ window.addEventListener('DOMContentLoaded',()=>{if(!document.getElementById('map
 
 
 
+async function pnEnterMasterFromClient(){
+ try{
+  const user=await window.PNAuth?.syncLocalUser?.();
+  if(user?.id){
+   const hasMaster=await window.PNAuth?.hasMasterProfile?.();
+   if(hasMaster){
+    const owner=localStorage.getItem('pn_master_cache_owner');
+    if(owner!==String(user.id)){
+     ['pn_master_profile_0','pn_master_services_0','pn_master_slots','pn_master_backend_reviews','pn_master_schedule_config','pn_bookings','pn_chats','pn_master_chat_unread','pn_master_chat_read_at','pn_master_chat_read_at_v49'].forEach(k=>localStorage.removeItem(k));
+    }
+    localStorage.setItem('pn_master_cache_owner',String(user.id));
+    localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:user.name||'Мастер',test:!!window.PN_TEST_MODE,supabase:true}));
+    localStorage.setItem('pn_last_mode','master');
+    window.location.assign('master.html');
+    return;
+   }
+   window.location.assign('master-login.html?from=client#register');
+   return;
+  }
+ }catch(e){console.warn('Open master cabinet:',e)}
+ window.location.assign('master-login.html');
+}
+
 const masterCabinetBtn=document.getElementById('openMasterCabinet');
 if(masterCabinetBtn){
  masterCabinetBtn.textContent='Кабинет мастера';
@@ -814,9 +837,7 @@ if(masterCabinetBtn){
  masterCabinetBtn.addEventListener('click',(e)=>{
    e.preventDefault();
    e.stopPropagation();
-   const hasMasterNow=!!localStorage.getItem('pn_master_session');
-   localStorage.setItem('pn_last_mode','master');
-   window.location.assign(hasMasterNow?'master.html':'master-login.html');
+   pnEnterMasterFromClient();
  });
 }
 
@@ -896,7 +917,7 @@ async function pnRefreshClientAccount(){
    <div class="client-account-section client-account-pro"><h3>ProfiNaviPro</h3><p>${hasMaster?'Управляйте своим кабинетом мастера.':'Хотите принимать клиентов через ProfiNavi?'}</p>
    <button class="wide account-master-link" id="pnMasterAction">${hasMaster?'Кабинет мастера · ProfiNaviPro':'Стать мастером'}</button></div>
    <div class="client-account-section client-account-session"><button class="client-logout-btn" type="button" id="pnClientLogout">Выйти из аккаунта</button></div>`;
- host.querySelector('#pnMasterAction').onclick=()=>location.href=hasMaster?'master-login.html':'master-login.html#register';
+ host.querySelector('#pnMasterAction').onclick=()=>pnEnterMasterFromClient();
  host.querySelector('#pnClientLogout').onclick=pnLogoutClient;
 }
 async function pnLogoutClient(){

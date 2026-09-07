@@ -45,14 +45,14 @@ $('showRegister').onclick=()=>pane('registerPane');$('showLogin').onclick=()=>pa
 $('backRegister').onclick=()=>pane(pending?.mode==='register'?'registerPane':'loginPane');
 $('loginBtn').onclick=async()=>{
  const p=fullPhone($('loginPhone').value),btn=$('loginBtn');if(!p)return alert('Введите полный номер телефона.');
- pending={mode:'login',phone:p};btn.disabled=true;btn.textContent='Запрашиваем код…';
+ pending={mode:'login',phone:p};btn.disabled=true;btn.textContent='Проверяем номер…';
  try{const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:false,purpose:'client-login'});if(error)throw error;openCodePane()}
  catch(e){alert('Не удалось запросить код: '+e.message)}finally{btn.disabled=false;btn.textContent='Получить код'}
 };
 $('registerBtn').onclick=async()=>{
  const name=$('regName').value.trim(),p=fullPhone($('regPhone').value),btn=$('registerBtn');if(!name||!p)return alert('Введите имя и полный номер телефона.');
- pending={mode:'register',name,phone:p};btn.disabled=true;btn.textContent='Запрашиваем код…';
- try{const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:true,purpose:'client-register'});if(error)throw error;openCodePane()}
+ pending={mode:'register',name,phone:p};btn.disabled=true;btn.textContent='Проверяем номер…';
+ try{const pre=await PNAuth.checkPhone(p,'client-register');if(pre.error)throw pre.error;btn.textContent='Запрашиваем код…';const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:true,purpose:'client-register'});if(error)throw error;openCodePane()}
  catch(e){alert('Не удалось начать регистрацию: '+e.message)}finally{btn.disabled=false;btn.textContent='Получить код'}
 };
 $('verifyBtn').onclick=async()=>{
@@ -63,6 +63,7 @@ $('verifyBtn').onclick=async()=>{
    const {data:verified,error}=await PNAuth.verifyOtp('phone',pending.phone,code,{shouldCreateUser:isRegister,purpose:isRegister?'client-register':'client-login'});if(error)throw error;
    const user=await PNAuth.currentUser();if(!user)throw new Error('Не удалось создать сессию');
    if(isRegister){
+     if(window.PN_TEST_MODE&&verified?.isNewUser!==true)throw new Error('Этот номер уже зарегистрирован. Войдите в существующий аккаунт.');
      const {data:existingProfile,error:existingErr}=await pnSupabase.from('profiles').select('role').eq('id',user.id).maybeSingle();if(existingErr)throw existingErr;
      const {error:pErr}=await pnSupabase.from('profiles').upsert({id:user.id,name:pending.name,phone:pending.phone,role:existingProfile?.role||'client',updated_at:new Date().toISOString()},{onConflict:'id'});if(pErr)throw pErr;
      const {error:metaErr}=await pnSupabase.auth.updateUser({data:{name:pending.name,phone:pending.phone}});if(metaErr)throw metaErr;

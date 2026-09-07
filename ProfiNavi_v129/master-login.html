@@ -15,7 +15,7 @@ label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}input,selec
 <label>Имя *</label><input id="regName" autocomplete="name">
 <label>Номер телефона *</label><div class="phonebox"><span class="prefix">🇰🇬 +996</span><input id="regPhone" type="tel" inputmode="numeric" placeholder="555 55 55 55" maxlength="12"></div>
 <label>Название профиля *</label><input id="regProfileName" placeholder="Например: Aika Nails">
-<label>Город *</label><select id="regCity"><option>Бишкек</option><option>Ош</option><option>Джалал-Абад</option><option>Каракол</option><option>Токмок</option><option>Узген</option><option>Кызыл-Кия</option><option>Балыкчы</option><option>Кара-Балта</option><option>Нарын</option><option>Талас</option><option>Баткен</option><option>Кант</option><option>Кара-Суу</option><option>Раззаков</option><option>Кочкор-Ата</option><option>Майлуу-Суу</option><option>Таш-Кумыр</option><option>Шопоков</option><option>Кербен</option><option>Кадамжай</option><option>Айдаркен</option><option>Орловка</option><option>Кемин</option><option>Каинды</option></select>
+<label>Город *</label><select id="regCity"><option>Бишкек</option><option>Ош</option><option>Манас</option><option>Каракол</option><option>Нарын</option><option>Талас</option><option>Баткен</option></select>
 <label>Адрес *</label><input id="regAddress" placeholder="Например: Московская 14">
 <label>Район *</label><select id="regDistrict"><option value="">Выберите район</option></select>
 <div style="margin:12px 0 16px">
@@ -50,7 +50,10 @@ function bindPhone(id){
   el.addEventListener('input',()=>{el.value=formatLocal(el.value)});
 }
 
-const $=id=>document.getElementById(id);let pending=null;const masterAuthParams=new URLSearchParams(location.search);const masterReturn=window.PNSafeReturnPath?PNSafeReturnPath(masterAuthParams.get('return'),'master.html'):'master.html';
+const $=id=>document.getElementById(id);
+let pending=null,existingClientUser=null,existingClientPhone='';
+const masterAuthParams=new URLSearchParams(location.search);
+const masterReturn=window.PNSafeReturnPath?PNSafeReturnPath(masterAuthParams.get('return'),'master.html'):'master.html';
 function prepareMasterCache(userId){
  const owner=localStorage.getItem('pn_master_cache_owner');
  if(owner!==String(userId)){
@@ -60,16 +63,35 @@ function prepareMasterCache(userId){
 }
 function pane(id){['loginPane','registerPane','codePane'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
 ['loginPhone','regPhone'].forEach(bindPhone);
-$('showRegister').onclick=()=>pane('registerPane');if(location.hash==='#register')pane('registerPane');$('showLogin').onclick=()=>pane('loginPane');$('backRegister').onclick=()=>pane(pending?.mode==='register'?'registerPane':'loginPane');
-function openCodePane(){ $('regCode').value='';$('demoOtpNote').classList.toggle('hidden',window.PN_TEST_MODE!==true);$('codeSubtitle').textContent=window.PN_TEST_MODE?'Введите демо-код подтверждения.':'Введите 6-значный код из SMS.';pane('codePane');setTimeout(()=>$('regCode').focus(),50) };
+$('showRegister').onclick=()=>{pane('registerPane');hydrateExistingClientRegistration()};
+if(location.hash==='#register')pane('registerPane');
+$('showLogin').onclick=()=>pane('loginPane');
+$('backRegister').onclick=()=>pane(pending?.mode==='register'?'registerPane':'loginPane');
+function openCodePane(){
+ $('regCode').value='';
+ $('demoOtpNote').classList.toggle('hidden',window.PN_TEST_MODE!==true);
+ $('codeSubtitle').textContent=window.PN_TEST_MODE?'Введите демо-код подтверждения.':'Введите 6-значный код из SMS.';
+ pane('codePane');setTimeout(()=>$('regCode').focus(),50)
+}
 
-const dm={'Бишкек':['ЦУМ / Центр','Vefa / Южные ворота','Асанбай','Джал','5 микрорайон','6 микрорайон','7 микрорайон','8 микрорайон','9 микрорайон','10 микрорайон','11 микрорайон','12 микрорайон','Тунгуч','Восток-5','Аламедин-1','Дордой','Кок-Жар','Арча-Бешик','Ак-Орго','Ак-Ордо','Филармония','Политех','Моссовет'],'Ош':['Центр','Черёмушки','Амир-Темур','Ак-Тилек','Манас-Ата','Туран','Жапалак'],'Джалал-Абад':['Центр','Спутник','Кок-Арт','Достук'],'Каракол':['Центр','Кашка-Суу','Восход','Пристань-Пржевальск']};function fillD(){let a=dm[$('regCity').value]||['Центр','Север','Юг','Восток','Запад'];$('regDistrict').innerHTML='<option value="">Выберите район</option>'+a.map(x=>`<option>${x}</option>`).join('')}$('regCity').onchange=fillD;fillD();$('categoryBtn').onclick=(e)=>{e.stopPropagation();$('categoryMenu').classList.toggle('hidden')};
+const dm={
+ 'Бишкек':['ЦУМ / Центр','Vefa / Южные ворота','Асанбай','Джал','5 микрорайон','6 микрорайон','7 микрорайон','8 микрорайон','9 микрорайон','10 микрорайон','11 микрорайон','12 микрорайон','Тунгуч','Восток-5','Аламедин-1','Дордой','Кок-Жар','Арча-Бешик','Ак-Орго','Ак-Ордо','Филармония','Политех','Моссовет'],
+ 'Ош':['Центр','Черёмушки','Амир-Темур','Ак-Тилек','Манас-Ата','Туран','Жапалак'],
+ 'Манас':['Центр','Спутник','Кок-Арт','Достук'],
+ 'Каракол':['Центр','Кашка-Суу','Восход','Пристань-Пржевальск'],
+ 'Нарын':['Центр','Север','Юг'],
+ 'Талас':['Центр','Север','Юг'],
+ 'Баткен':['Центр','Север','Юг']
+};
+function fillD(){let a=dm[$('regCity').value]||['Центр','Север','Юг','Восток','Запад'];$('regDistrict').innerHTML='<option value="">Выберите район</option>'+a.map(x=>`<option>${x}</option>`).join('')}
+$('regCity').onchange=fillD;fillD();
+$('categoryBtn').onclick=(e)=>{e.stopPropagation();$('categoryMenu').classList.toggle('hidden')};
 $('categoryMenu').onclick=(e)=>e.stopPropagation();
 document.addEventListener('click',()=>{$('categoryMenu').classList.add('hidden')});
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')$('categoryMenu').classList.add('hidden')});
 document.querySelectorAll('#categoryMenu input').forEach(x=>x.onchange=()=>{
-  let a=[...document.querySelectorAll('#categoryMenu input:checked')].map(x=>x.value);
-  $('categoryBtn').textContent=(a.length?a.join(', '):'Выберите категории')+' ▾';
+ let a=[...document.querySelectorAll('#categoryMenu input:checked')].map(x=>x.value);
+ $('categoryBtn').textContent=(a.length?a.join(', '):'Выберите категории')+' ▾';
 });
 
 async function finishMasterLogin(user){
@@ -83,9 +105,43 @@ async function finishMasterLogin(user){
  localStorage.setItem('pn_master_profile_0',JSON.stringify(lp));localStorage.setItem('pn_last_mode','master');location.href=masterReturn;
 }
 
+async function completeMasterRegistration(user,data){
+ if(!user)throw new Error('Не удалось определить аккаунт');
+ await pnSupabase.auth.updateUser({data:{name:data.name,phone:data.phone}}).then(({error})=>{if(error)throw error});
+ const {data:profileExists,error:profileCheckErr}=await pnSupabase.from('profiles').select('id').eq('id',user.id).maybeSingle();if(profileCheckErr)throw profileCheckErr;
+ if(profileExists){
+  const {error}=await pnSupabase.from('profiles').update({name:data.name,phone:data.phone,role:'master',city:data.city,updated_at:new Date().toISOString()}).eq('id',user.id);if(error)throw error;
+ }else{
+  const {error}=await pnSupabase.from('profiles').insert({id:user.id,name:data.name,phone:data.phone,role:'master',city:data.city,updated_at:new Date().toISOString()});if(error)throw error;
+ }
+ const {error:mErr}=await pnSupabase.from('master_profiles').upsert({user_id:user.id,profile_name:data.profileName,salon_name:null,city:data.city,address:data.address,area:data.area||null,categories:data.categories,specialization:data.categories.join(', '),latitude:data.lat,longitude:data.lng,is_published:false,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(mErr)throw mErr;
+ prepareMasterCache(user.id);
+ localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:data.name,test:!!window.PN_TEST_MODE,supabase:true}));localStorage.setItem('pn_last_mode','master');
+ let profile={};try{profile=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
+ profile={...profile,name:data.profileName,profileName:data.profileName,ownerName:data.name,city:data.city,area:data.area||'',address:data.address,categories:data.categories,lat:data.lat,lng:data.lng,is_published:false,user_id:user.id};
+ localStorage.setItem('pn_master_profile_0',JSON.stringify(profile));location.href=masterReturn;
+}
+
+async function hydrateExistingClientRegistration(){
+ try{
+  const user=await PNAuth.currentUser();if(!user)return false;
+  if(await PNAuth.hasMasterProfile()){await finishMasterLogin(user);return true}
+  existingClientUser=user;
+  const {data:prof,error}=await pnSupabase.from('profiles').select('name,phone').eq('id',user.id).maybeSingle();if(error)throw error;
+  const name=prof?.name||user.user_metadata?.name||'';
+  const phone=user.phone||prof?.phone||user.user_metadata?.phone||'';
+  existingClientPhone=fullPhone(phone);
+  $('regName').value=name;
+  $('regPhone').value=formatLocal(phone);
+  if(!$('regProfileName').value&&name)$('regProfileName').value=name;
+  pane('registerPane');
+  return true;
+ }catch(e){console.warn('Master registration prefill:',e);return false}
+}
+
 $('loginBtn').onclick=async()=>{
  const btn=$('loginBtn'),p=fullPhone($('loginPhone').value);if(!p)return alert('Введите полный номер телефона.');
- pending={mode:'login',phone:p};btn.disabled=true;btn.textContent='Запрашиваем код…';
+ pending={mode:'login',phone:p};btn.disabled=true;btn.textContent='Проверяем номер…';
  try{const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:false,purpose:'master-login'});if(error)throw error;openCodePane()}
  catch(e){alert('Не удалось запросить код: '+e.message)}finally{btn.disabled=false;btn.textContent='Получить код'}
 };
@@ -96,31 +152,40 @@ $('registerBtn').onclick=async()=>{
  if(!name||!p||!profileName||!city||!address||!area||!categories.length)return alert('Заполните обязательные поля. Выберите хотя бы одну категорию.');
  if(!window.pickedLocation)return alert('Укажите точку на карте.');
  pending={mode:'register',name,phone:p,profileName,city,address,area,categories,lat:window.pickedLocation.lat,lng:window.pickedLocation.lng};
- const btn=$('registerBtn');btn.disabled=true;btn.textContent='Запрашиваем код…';
- try{const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:true,purpose:'master-register'});if(error)throw error;openCodePane()}
- catch(e){alert('Не удалось начать регистрацию: '+e.message)}finally{btn.disabled=false;btn.textContent='Получить код'}
+ const btn=$('registerBtn');btn.disabled=true;btn.textContent='Проверяем номер…';
+ try{
+  const pre=await PNAuth.checkPhone(p,'master-register');if(pre.error)throw pre.error;
+  const current=await PNAuth.currentUser();
+  if(existingClientUser&&current?.id===existingClientUser.id&&p===existingClientPhone){
+   btn.textContent='Создаём кабинет…';await completeMasterRegistration(current,pending);return;
+  }
+  btn.textContent='Запрашиваем код…';
+  const {error}=await PNAuth.sendOtp('phone',p,{shouldCreateUser:true,purpose:'master-register'});if(error)throw error;openCodePane();
+ }catch(e){alert('Не удалось начать регистрацию: '+e.message)}finally{btn.disabled=false;btn.textContent='Зарегистрировать аккаунт'}
 };
 
 $('verifyBtn').onclick=async()=>{
  if(!pending)return;const code=$('regCode').value.trim(),btn=$('verifyBtn');if(!/^\d{6}$/.test(code))return alert('Введите 6 цифр.');
  btn.disabled=true;btn.textContent='Проверяем…';
  try{
-   const isRegister=pending.mode==='register';
-   const {error}=await PNAuth.verifyOtp('phone',pending.phone,code,{shouldCreateUser:isRegister,purpose:isRegister?'master-register':'master-login'});if(error)throw error;
-   const user=await PNAuth.currentUser();if(!user)throw new Error('Не удалось создать сессию');
-   if(!isRegister){await finishMasterLogin(user);return}
-   await pnSupabase.auth.updateUser({data:{name:pending.name,phone:pending.phone}});
-   let {error:pErr}=await pnSupabase.from('profiles').update({name:pending.name,phone:pending.phone,role:'master',city:pending.city,updated_at:new Date().toISOString()}).eq('id',user.id);if(pErr)throw pErr;
-   const {data:profileExists,error:profileCheckErr}=await pnSupabase.from('profiles').select('id').eq('id',user.id).maybeSingle();if(profileCheckErr)throw profileCheckErr;
-   if(!profileExists){const {error:insErr}=await pnSupabase.from('profiles').insert({id:user.id,name:pending.name,phone:pending.phone,role:'master',city:pending.city,updated_at:new Date().toISOString()});if(insErr)throw insErr;}
-   const {error:mErr}=await pnSupabase.from('master_profiles').upsert({user_id:user.id,profile_name:pending.profileName,salon_name:null,city:pending.city,address:pending.address,area:pending.area||null,categories:pending.categories,specialization:pending.categories.join(', '),latitude:pending.lat,longitude:pending.lng,is_published:false,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(mErr)throw mErr;
-   prepareMasterCache(user.id);
-   localStorage.setItem('pn_master_session',JSON.stringify({userId:user.id,name:pending.name,test:!!window.PN_TEST_MODE,supabase:true}));localStorage.setItem('pn_last_mode','master');
-   let profile={};try{profile=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}
-   profile={...profile,name:pending.profileName,profileName:pending.profileName,ownerName:pending.name,city:pending.city,area:pending.area||'',address:pending.address,categories:pending.categories,lat:pending.lat,lng:pending.lng,is_published:false,user_id:user.id};
-   localStorage.setItem('pn_master_profile_0',JSON.stringify(profile));location.href=masterReturn;
+  const isRegister=pending.mode==='register';
+  const {data:verified,error}=await PNAuth.verifyOtp('phone',pending.phone,code,{shouldCreateUser:isRegister,purpose:isRegister?'master-register':'master-login'});if(error)throw error;
+  const user=await PNAuth.currentUser();if(!user)throw new Error('Не удалось создать сессию');
+  if(!isRegister){await finishMasterLogin(user);return}
+  if(!existingClientUser&&window.PN_TEST_MODE&&verified?.isNewUser!==true)throw new Error('Этот номер уже зарегистрирован. Войдите в существующий аккаунт.');
+  await completeMasterRegistration(user,pending);
  }catch(e){alert((pending.mode==='register'?'Не удалось зарегистрировать мастера: ':'Не удалось войти: ')+e.message);btn.disabled=false;btn.textContent='Подтвердить'}
 };
+
+window.addEventListener('DOMContentLoaded',async()=>{
+ try{
+  const user=await PNAuth.currentUser();
+  if(!user)return;
+  const hasMaster=await PNAuth.hasMasterProfile();
+  if(hasMaster){await finishMasterLogin(user);return}
+  if(location.hash==='#register'||masterAuthParams.get('mode')==='register'||masterAuthParams.get('from')==='client')await hydrateExistingClientRegistration();
+ }catch(e){console.warn('Master auth bootstrap:',e)}
+});
 </script>
 <script>
 (function(){

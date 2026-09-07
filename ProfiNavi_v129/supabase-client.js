@@ -76,10 +76,29 @@ async function pnRemoveChatMedia(path){
 }
 window.PNChatMedia={upload:pnUploadChatMedia,signRows:pnSignChatMediaRows,remove:pnRemoveChatMedia};
 
+async function pnEdgeHeaders(){
+ const headers={'Content-Type':'application/json','apikey':PN_SUPABASE_PUBLISHABLE_KEY};
+ try{
+  const {data}=await pnSupabase?.auth?.getSession?.();
+  const token=data?.session?.access_token;
+  if(token)headers.Authorization=`Bearer ${token}`;
+ }catch(e){}
+ return headers;
+}
+
 window.PNAuth={
  async currentUser(){
   if(!window.pnSupabase)return null;
   const {data}=await pnSupabase.auth.getUser();return data?.user||null
+ },
+ async checkPhone(contact,purpose='auth'){
+  const phone=pnPhone(contact);
+  if(!phone)return {data:null,error:new Error('Введите полный номер телефона')};
+  try{
+   const r=await fetch(`${PN_SUPABASE_URL}/functions/v1/profinavi-test-phone-auth`,{method:'POST',headers:await pnEdgeHeaders(),body:JSON.stringify({action:'check',phone,purpose})});
+   const body=await r.json();if(!r.ok)throw new Error(body.error||'Проверка номера не пройдена');
+   return {data:body,error:null};
+  }catch(error){return {data:null,error}}
  },
  async sendOtp(method,contact,options={}){
   if(method!=='phone')return {data:null,error:new Error('В ProfiNavi используется только номер телефона')};
@@ -87,11 +106,12 @@ window.PNAuth={
   sessionStorage.setItem('pn_test_pending_phone',phone);
   if(PN_TEST_MODE){
    try{
-    const r=await fetch(`${PN_SUPABASE_URL}/functions/v1/profinavi-test-phone-auth`,{method:'POST',headers:{'Content-Type':'application/json','apikey':PN_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({action:'send',phone,purpose,shouldCreateUser})});
+    const r=await fetch(`${PN_SUPABASE_URL}/functions/v1/profinavi-test-phone-auth`,{method:'POST',headers:await pnEdgeHeaders(),body:JSON.stringify({action:'send',phone,purpose,shouldCreateUser})});
     const body=await r.json();if(!r.ok)throw new Error(body.error||'Не удалось запросить код');
     return {data:body,error:null};
    }catch(error){return {data:null,error}}
   }
+  const pre=await this.checkPhone(phone,purpose);if(pre.error)return pre;
   return pnSupabase.auth.signInWithOtp({phone,options:{shouldCreateUser}});
  },
  async verifyOtp(method,contact,token,options={}){
@@ -99,7 +119,7 @@ window.PNAuth={
   const phone=pnPhone(contact),shouldCreateUser=options.shouldCreateUser!==false,purpose=options.purpose||'auth';
   if(PN_TEST_MODE){
    try{
-    const r=await fetch(`${PN_SUPABASE_URL}/functions/v1/profinavi-test-phone-auth`,{method:'POST',headers:{'Content-Type':'application/json','apikey':PN_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({action:'verify',phone,code:String(token),purpose,shouldCreateUser})});
+    const r=await fetch(`${PN_SUPABASE_URL}/functions/v1/profinavi-test-phone-auth`,{method:'POST',headers:await pnEdgeHeaders(),body:JSON.stringify({action:'verify',phone,code:String(token),purpose,shouldCreateUser})});
     const body=await r.json();if(!r.ok)throw new Error(body.error||'Не удалось подтвердить номер');
     const out=await pnSupabase.auth.setSession({access_token:body.access_token,refresh_token:body.refresh_token});if(out.error)throw out.error;
     sessionStorage.setItem('pn_test_pending_phone',body.phone||phone);

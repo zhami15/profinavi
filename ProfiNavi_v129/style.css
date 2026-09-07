@@ -3043,6 +3043,5 @@ body.works-cropping{overflow:hidden;touch-action:none}
 .chat-row.master .chat-message-image{margin-right:auto}
 .master-chat-compose.chat-media-form{padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line)}
 .master-chat-compose.chat-media-form .chat-compose-row input:not([type="file"]){border:1px solid var(--line);border-radius:999px;padding:11px 15px;outline:none}
-@media(min-width:721px){.chats-bottom-nav{left:50%!important;right:auto!important;transform:translateX(-50%);max-width:720px}}
 
 .support-chat-avatar{display:grid;place-items:center;color:var(--pink)}.support-chat-avatar svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

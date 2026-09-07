@@ -40,6 +40,21 @@ function label(d){return d<1?`${Math.max(1,Math.round(d*1000))} м`:`${d.toFixed
 function masterCategoryKeys(m){const a=Array.isArray(m.categories)&&m.categories.length?m.categories:[m.cat];return a.filter(x=>typeof x==='string')}
 function categoryLabel(m){return masterCategoryKeys(m).map(x=>serviceLabels[x]||x).join(' · ')}
 function anyFilters(){return filters.priceMin>0||filters.priceMax!==null||filters.date!=='all'||filters.areas.size||filters.services.size}
+function filterIsActive(kind){
+ if(kind==='price')return filters.priceMin>0||filters.priceMax!==null;
+ if(kind==='date')return filters.date!=='all';
+ if(kind==='area')return filters.areas.size>0;
+ if(kind==='service')return filters.services.size>0;
+ return false;
+}
+function openMasterProfile(m){if(m&&Number.isFinite(Number(m.id)))location.href=`profile.html?id=${Number(m.id)}`}
+function primaryService(m){
+ const list=Array.isArray(m?.services)?m.services:[];
+ const service=list.find(x=>x&&typeof x==='object');
+ if(service)return {name:service.name||'Услуга',price:service.price||m.price||'0 сом'};
+ const key=list.find(x=>typeof x==='string')||masterCategoryKeys(m)[0];
+ return {name:serviceLabels[key]||key||'Услуга',price:m?.price||'0 сом'};
+}
 function masterPriceValues(m){
  const vals=(Array.isArray(m.services)?m.services:[]).map(s=>{const old=Number(s.oldPrice??s.price);const np=s.newPrice==null?null:Number(s.newPrice);if(Number.isFinite(np)&&np>=0&&(!Number.isFinite(old)||np<old))return np;if(Number.isFinite(old))return old;const n=Number.parseInt(String(s.price||'').replace(/\D/g,''),10);return Number.isFinite(n)?n:null}).filter(Number.isFinite);
  if(vals.length)return vals;return [Number(m.priceValue)||0];
@@ -65,19 +80,16 @@ function renderSheet(){
  resetBtn.classList.toggle('hidden',!anyFilters());
  if(masterStrip){
    masterStrip.innerHTML=list.length?list.map(m=>{
-     const firstService=Array.isArray(m.services)?m.services[0]:null;const service=(firstService&&typeof firstService==='object'?firstService.name:serviceLabels[firstService])||categoryLabel(m)||'Услуга';
-     return `<button class="map-strip-card" type="button" data-master-id="${m.id}" aria-label="Открыть профиль ${mapEsc(m.name)}">
+     const service=primaryService(m);
+     const rating=window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1));
+     return `<a class="map-strip-card" href="profile.html?id=${Number(m.id)}" data-master-id="${m.id}" aria-label="Открыть профиль ${mapEsc(m.name)}">
        <img src="${mapEsc(m.avatar)}" alt="">
        <span class="map-strip-copy">
-         <span class="map-strip-name"><b>${mapEsc(m.name)}</b><em>${window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+Number(m.rating||0).toFixed(1))}</em></span>
-         <span class="map-strip-service"><span>${mapEsc(service)}</span><strong>${mapEsc(m.price)}</strong></span>
+         <span class="map-strip-name"><b>${mapEsc(m.name)}</b><em>${mapEsc(rating)}</em></span>
+         <span class="map-strip-service"><span>${mapEsc(service.name)}</span><strong>${mapEsc(service.price)}</strong></span>
        </span>
-     </button>`;
+     </a>`;
    }).join(''):`<div style="padding:18px;text-align:center;width:100%"><b>Пока нет мастеров</b><br><small>После публикации мастер появится на карте.</small></div>`;
-   masterStrip.querySelectorAll('.map-strip-card').forEach(card=>{
-     const m=masters.find(x=>x.id===Number(card.dataset.masterId));
-     card.onclick=()=>location.href=`profile.html?id=${m.id}`;
-   });
  }
  if(selectedCard && !selectedCard.classList.contains('hidden')){
    const id=Number(selectedCard.dataset.masterId);
@@ -98,7 +110,7 @@ function showMasterCard(m){
 }
 function clearMarkers(){markers.forEach(x=>map.removeLayer(x));markers=[]}
 function makeIcon(m){return L.divIcon({className:'pn-leaflet-marker',html:`<div class="map-master-marker"><img src="${mapEsc(m.avatar)}" alt=""><span>${mapEsc(m.name)}</span></div>`,iconSize:[56,68],iconAnchor:[28,58]})}
-function renderMarkers(){if(!map){renderSheet();return}clearMarkers();visible().forEach(m=>{const marker=L.marker([m.lat,m.lng],{icon:makeIcon(m)}).addTo(map);marker.on('click',()=>{showMasterCard(m);const card=masterStrip?.querySelector(`[data-master-id="${m.id}"]`);if(card){masterStrip.querySelectorAll('.map-strip-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');card.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}});markers.push(marker)});renderSheet();fitAll();updateTriggerLabels()}
+function renderMarkers(){if(!map){renderSheet();updateTriggerLabels();return}clearMarkers();visible().forEach(m=>{const marker=L.marker([m.lat,m.lng],{icon:makeIcon(m)}).addTo(map);marker.on('click',e=>{if(e?.originalEvent&&window.L?.DomEvent)L.DomEvent.stopPropagation(e.originalEvent);openMasterProfile(m)});markers.push(marker)});renderSheet();fitAll();updateTriggerLabels()}
 function fitAll(){if(!map)return;const pts=visible().map(m=>[m.lat,m.lng]);if(userLocation&&!pnExplicitCity)pts.unshift([userLocation.lat,userLocation.lng]);if(pts.length)map.fitBounds(pts,{paddingTopLeft:[35,35],paddingBottomRight:[35,35],maxZoom:14});else{const c=PN_MAP_CITIES[selectedCity];map.setView([c.lat,c.lng],c.zoom)}}
 function requestLocation(){if(pnExplicitCity){statusEl.textContent=`Мастера на карте: ${selectedCity}`;fitAll();return}if(!navigator.geolocation){statusEl.textContent=`Мастера на карте: ${selectedCity}`;return}navigator.geolocation.getCurrentPosition(p=>{userLocation={lat:p.coords.latitude,lng:p.coords.longitude};statusEl.textContent='Показываем мастеров рядом с вами';if(userMarker)map.removeLayer(userMarker);userMarker=L.circleMarker([userLocation.lat,userLocation.lng],{radius:9,weight:4,color:'#fff',fillColor:'#2f80ed',fillOpacity:1}).addTo(map);renderMarkers()},e=>{statusEl.textContent=`Мастера на карте: ${selectedCity}`;fitAll()},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
 function showError(){errorEl.textContent='Карта временно не загрузилась. Список мастеров доступен ниже.';errorEl.classList.remove('hidden');statusEl.textContent='Список мастеров доступен ниже'}
@@ -153,19 +165,28 @@ function openFilter(kind){
 function closeFilter(){filterSheet.classList.remove('open');filterSheet.setAttribute('aria-hidden','true');filterBackdrop.classList.add('hidden');document.body.classList.remove('filter-sheet-open')}
 function applyFilter(){if(currentSheet==='area')filters.areas=new Set(draft);else if(currentSheet==='service')filters.services=new Set(draft);else if(currentSheet==='price'){filters.priceMin=draft.min||0;filters.priceMax=draft.max;}else filters[currentSheet]=draft;closeFilter();renderMarkers()}
 function updateTriggerLabels(){
- // Названия фильтров всегда остаются одинаковыми; выбранное состояние показываем только цветом.
+ // Названия фильтров всегда остаются одинаковыми; применённое состояние показываем цветом.
  const fixedLabels={price:'Цена',date:'Дата',area:'Район',service:'Услуги'};
  document.querySelectorAll('.search-filter-trigger').forEach(b=>{
    const k=b.dataset.sheet;
    const label=b.querySelector('span');
    if(label)label.textContent=fixedLabels[k];
-   const active=k==='price'?(filters.priceMin>0||filters.priceMax!==null):k==='date'?filters.date!=='all':k==='area'?filters.areas.size:filters.services.size;
-   b.classList.toggle('active',!!active);
+   const active=filterIsActive(k);
+   b.classList.toggle('active',active);
+   b.setAttribute('aria-pressed',active?'true':'false');
  });
 }
 document.querySelectorAll('.search-filter-trigger').forEach(b=>b.onclick=()=>openFilter(b.dataset.sheet));
 document.getElementById('closeFilterSheet').onclick=closeFilter;filterBackdrop.onclick=closeFilter;document.getElementById('applyCurrentFilter').onclick=applyFilter;
-document.getElementById('clearCurrentFilter').onclick=()=>{if(currentSheet==='area'||currentSheet==='service')draft=new Set();else if(currentSheet==='price'){filters.priceMin=0;filters.priceMax=null;}else draft='all';openFilter(currentSheet)};
+document.getElementById('clearCurrentFilter').onclick=()=>{
+ if(!currentSheet)return;
+ if(currentSheet==='area'){filters.areas.clear();draft=new Set()}
+ else if(currentSheet==='service'){filters.services.clear();draft=new Set()}
+ else if(currentSheet==='price'){filters.priceMin=0;filters.priceMax=null;draft={min:0,max:null}}
+ else {filters[currentSheet]='all';draft='all'}
+ renderMarkers();
+ openFilter(currentSheet);
+};
 resetBtn.onclick=()=>{filters.priceMin=0;filters.priceMax=null;filters.date='all';filters.areas.clear();filters.services.clear();renderMarkers()};
 renderSheet();updateTriggerLabels();loadMap();
 

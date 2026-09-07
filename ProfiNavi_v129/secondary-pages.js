@@ -4,23 +4,39 @@ const secondaryEsc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&l
 const snapIdeas=[];
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
 const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
-const getFavWorks=()=>{try{const x=JSON.parse(localStorage.getItem('pn_fav_works')||'[]');return Array.isArray(x)?x.map(String):[]}catch(e){return[]}};
-const setFavWorks=v=>localStorage.setItem('pn_fav_works',JSON.stringify([...new Set((v||[]).map(String))]));
+let savedWorkIds=new Set();
+const getFavWorks=()=>[...savedWorkIds].map(id=>`work:${id}`);
+const isWorkSaved=workId=>!!workId&&savedWorkIds.has(String(workId));
+const setWorkSavedState=(workId,on)=>{const id=String(workId||'');if(!id)return;if(on)savedWorkIds.add(id);else savedWorkIds.delete(id)};
+function legacySavedWorkIds(){
+ try{
+  const raw=JSON.parse(localStorage.getItem('pn_fav_works')||'[]');
+  if(!Array.isArray(raw))return[];
+  const ids=[];
+  raw.map(String).forEach(k=>{
+   if(k.startsWith('work:')){const id=k.slice(5);if(id)ids.push(id);return}
+   const m=k.match(/^(\d+):(\d+)$/);if(!m)return;
+   const workId=masters[Number(m[1])]?.workItems?.[Number(m[2])]?.id;if(workId)ids.push(String(workId));
+  });
+  return [...new Set(ids)];
+ }catch(e){return[]}
+}
 function openProfile(i){location.href=`profile.html?id=${i}`}
 function toggleMaster(i){const a=getFavs();const p=a.indexOf(i);p>=0?a.splice(p,1):a.push(i);setFavs(a);renderFavorites(document.querySelector('[data-fav-tab].active')?.dataset.favTab||'masters')}
 function workFavKey(x){return x?.workId?`work:${x.workId}`:String(x?.workKey||'')}
 function setWorkCount(workId,count){if(!workId)return;const n=Math.max(0,Number(count)||0);masters.filter(Boolean).forEach(m=>(m.workItems||[]).forEach(w=>{if(String(w.id)===String(workId))w.likesCount=n}));activeWorks.forEach(x=>{if(String(x.workId)===String(workId))x.likesCount=n})}
 async function toggleWork(k,workId,button){
- const a=getFavWorks(),p=a.indexOf(k),turningOn=p<0;if(turningOn)a.push(k);else a.splice(p,1);setFavWorks(a);
- if(button){button.classList.toggle('saved',turningOn);const heart=button.querySelector('.works-like-heart');if(heart)heart.textContent=turningOn?'♥':'♡'}
- renderFavorites(document.querySelector('[data-fav-tab].active')?.dataset.favTab||'works');
- if(!workId||!window.PNData?.setWorkLike||!window.PNAuth)return;
- let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user)return;
- try{const result=await PNData.setWorkLike(workId,turningOn);setWorkCount(workId,result.likesCount);if(button){const n=button.querySelector('.works-like-count');if(n)n.textContent=String(result.likesCount)}}catch(e){
-  const now=getFavWorks(),ix=now.indexOf(k);if(turningOn&&ix>=0)now.splice(ix,1);if(!turningOn&&ix<0)now.push(k);setFavWorks(now);
-  if(button){button.classList.toggle('saved',!turningOn);const heart=button.querySelector('.works-like-heart');if(heart)heart.textContent=!turningOn?'♥':'♡'}
-  alert('Не удалось сохранить работу: '+e.message)
- }
+ const id=String(workId||'');
+ if(!id||!window.PNData?.setWorkLike||!window.PNAuth)return alert('Эту работу пока нельзя сохранить. Обновите страницу.');
+ let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user){alert('Чтобы поставить лайк и сохранить работу, войдите как клиент.');return}
+ const turningOn=!isWorkSaved(id);
+ try{
+  const result=await PNData.setWorkLike(id,turningOn);
+  setWorkSavedState(id,turningOn);
+  setWorkCount(id,result.likesCount);
+  if(button){button.classList.toggle('saved',turningOn);const heart=button.querySelector('.works-like-heart');if(heart)heart.textContent=turningOn?'♥':'♡';const n=button.querySelector('.works-like-count');if(n)n.textContent=String(result.likesCount)}
+  renderFavorites(document.querySelector('[data-fav-tab].active')?.dataset.favTab||'works');
+ }catch(e){alert('Не удалось сохранить работу: '+e.message)}
 }
 
 const MASTER_SESSION_KEY='pn_master_session';
@@ -103,8 +119,15 @@ function setupMasterWorksAdd(){
  input.onchange=async()=>{const files=input.files;input.value='';if(!files?.length)return;try{const edited=await editMasterWorkFiles(files);await addMasterWorks(edited)}catch(e){if(e?.name!=='AbortError')alert('Не удалось обработать фотографию: '+e.message)}};
 }
 async function syncWorkLikesFromBackend(){
- if(!window.PNData?.listMyWorkLikes||!window.PNAuth)return getFavWorks();let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user)return getFavWorks();
- try{const db=await PNData.listMyWorkLikes(),local=getFavWorks(),pending=local.filter(k=>k.startsWith('work:')).map(k=>k.slice(5)),union=new Set(db);for(const id of pending){if(!union.has(id)){const result=await PNData.setWorkLike(id,true);setWorkCount(id,result.likesCount);union.add(id)}}const legacy=local.filter(k=>!k.startsWith('work:'));setFavWorks([...legacy,...[...union].map(id=>`work:${id}`)]);return getFavWorks()}catch(e){console.warn('work favorites sync',e);return getFavWorks()}
+ if(!window.PNData?.listMyWorkLikes||!window.PNAuth){savedWorkIds.clear();return[]}
+ let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user){savedWorkIds.clear();return[]}
+ try{
+  const db=new Set((await PNData.listMyWorkLikes()).map(String));
+  for(const id of legacySavedWorkIds())if(!db.has(id)){const result=await PNData.setWorkLike(id,true);setWorkCount(id,result.likesCount);db.add(id)}
+  savedWorkIds=db;
+  localStorage.removeItem('pn_fav_works');
+  return getFavWorks();
+ }catch(e){console.warn('work favorites sync',e);return getFavWorks()}
 }
 let activeWorks=[];
 function renderSnap(filter='all'){
@@ -114,9 +137,8 @@ function renderSnap(filter='all'){
 }
 function openWorksViewer(index){
  const viewer=document.getElementById('worksViewer'),list=document.getElementById('worksViewerList'); if(!viewer||!list)return;
- const fav=getFavWorks();
  list.innerHTML=activeWorks.map((x)=>{
-  const m=masters[x.master],k=workFavKey(x),saved=fav.includes(k);if(!m)return '';
+  const m=masters[x.master],k=workFavKey(x),saved=isWorkSaved(x.workId);if(!m)return '';
   return `<article class="works-viewer-slide">
   <img class="works-viewer-photo" src="${secondaryEsc(x.photo)}" alt="Работа ${secondaryEsc(m.name)}">
   <div class="works-viewer-info">

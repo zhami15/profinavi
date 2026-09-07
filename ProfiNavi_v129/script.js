@@ -330,8 +330,11 @@ function save2GisKey(){
 const grid=document.getElementById('mastersGrid');const search=document.getElementById('searchInput');
 const getFavs=()=>JSON.parse(localStorage.getItem('pn_favs')||'[]');
 const setFavs=v=>{localStorage.setItem('pn_favs',JSON.stringify(v));if(window.PNData&&window.PNAuth)PNAuth.currentUser().then(u=>{if(!u)return;PNData.listLegacyFavorites().then(old=>{const a=new Set(v.map(Number)),b=new Set(old.map(Number));[...a].filter(x=>!b.has(x)).forEach(x=>PNData.setLegacyFavorite(x,true).catch(()=>{}));[...b].filter(x=>!a.has(x)).forEach(x=>PNData.setLegacyFavorite(x,false).catch(()=>{}))}).catch(()=>{})}).catch(()=>{})};
-const getFavWorks=()=>JSON.parse(localStorage.getItem('pn_fav_works')||'[]');
-const setFavWorks=v=>localStorage.setItem('pn_fav_works',JSON.stringify(v));
+let pnSavedWorkIds=new Set();
+const getFavWorks=()=>[...pnSavedWorkIds].map(id=>`work:${id}`);
+const pnIsWorkSaved=id=>!!id&&pnSavedWorkIds.has(String(id));
+function pnLegacySavedWorkIds(){try{const raw=JSON.parse(localStorage.getItem('pn_fav_works')||'[]');if(!Array.isArray(raw))return[];const ids=[];raw.map(String).forEach(k=>{if(k.startsWith('work:')){const id=k.slice(5);if(id)ids.push(id);return}const m=k.match(/^(\d+):(\d+)$/);if(!m)return;const id=masters[Number(m[1])]?.workItems?.[Number(m[2])]?.id;if(id)ids.push(String(id))});return[...new Set(ids)]}catch(e){return[]}};
+async function pnSyncWorkFavorites(){if(!window.PNData?.listMyWorkLikes||!window.PNAuth){pnSavedWorkIds.clear();return}let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user){pnSavedWorkIds.clear();return}try{const db=new Set((await PNData.listMyWorkLikes()).map(String));for(const id of pnLegacySavedWorkIds())if(!db.has(id)){await PNData.setWorkLike(id,true);db.add(id)}pnSavedWorkIds=db;localStorage.removeItem('pn_fav_works')}catch(e){console.warn('Work favorites sync:',e)}}
 const getChats=()=>JSON.parse(localStorage.getItem('pn_chats')||'{}');
 const setChats=v=>localStorage.setItem('pn_chats',JSON.stringify(v));
 function getClientChatReads(){return JSON.parse(localStorage.getItem('pn_client_chat_read_at_v49')||'{}')}
@@ -364,8 +367,9 @@ function updateStats(){
  if(typeof updateChatBadge==='function')updateChatBadge();
 }
 function galleryItems(m){
- const images=m.gallery||Array.from({length:6},(_,i)=>m.avatar);
- return images.slice(0,10).map((src,j)=>{const mi=masters.indexOf(m);const key=`${mi}:${j}`;const saved=getFavWorks().includes(key);return `<div class="work-thumb" role="button" tabindex="0" onclick="event.stopPropagation();openProfile(${mi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openProfile(${mi})}"><img src="${pnEscHtml(src)}" alt="Работа ${pnEscHtml(m.name)} ${j+1}" loading="lazy"><button class="work-fav ${saved?'saved':''}" aria-label="Сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${key}')">${saved?'♥':'♡'}</button></div>`}).join('');
+ const mi=masters.indexOf(m);
+ const items=Array.isArray(m.workItems)&&m.workItems.length?m.workItems.map((w,j)=>({src:w.image_url,id:w.id,j})):(m.gallery||Array.from({length:6},()=>m.avatar)).map((src,j)=>({src,id:null,j}));
+ return items.slice(0,10).map(x=>{const saved=pnIsWorkSaved(x.id);return `<div class="work-thumb" role="button" tabindex="0" onclick="event.stopPropagation();openProfile(${mi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openProfile(${mi})}"><img src="${pnEscHtml(x.src)}" alt="Работа ${pnEscHtml(m.name)} ${x.j+1}" loading="lazy">${x.id?`<button class="work-fav ${saved?'saved':''}" aria-label="Лайк и сохранить работу" onclick="event.stopPropagation();toggleWorkFav('${pnEscHtml(x.id)}')">${saved?'♥':'♡'}</button>`:''}</div>`}).join('');
 }
 function serviceItems(m){
  const list=m.services||[{name:m.cat==='lashes'?'Наращивание ресниц':'Основная услуга',desc:m.desc,price:m.price,time:'1,5 ч.'}];
@@ -494,7 +498,7 @@ async function toggleFav(i){
    render();renderFavorites();
  }
 }
-function toggleWorkFav(key){const favs=getFavWorks();const pos=favs.indexOf(key);pos>=0?favs.splice(pos,1):favs.push(key);setFavWorks(favs);render();renderSnap(document.querySelector('[data-snap-filter].active')?.dataset.snapFilter||'all');renderFavorites();}
+async function toggleWorkFav(workId){const id=String(workId||'');if(!id||!window.PNData?.setWorkLike||!window.PNAuth)return;let user=null;try{user=await PNAuth.currentUser()}catch(e){}if(!user){alert('Чтобы поставить лайк и сохранить работу, войдите как клиент.');return}const on=!pnIsWorkSaved(id);try{const result=await PNData.setWorkLike(id,on);if(on)pnSavedWorkIds.add(id);else pnSavedWorkIds.delete(id);masters.filter(Boolean).forEach(m=>(m.workItems||[]).forEach(w=>{if(String(w.id)===id)w.likesCount=Number(result.likesCount)||0}));render();renderFavorites()}catch(e){alert('Не удалось сохранить работу: '+e.message)}}
 document.querySelectorAll('.cat').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.cat').forEach(b=>b.classList.remove('active'));btn.classList.add('active');current=btn.dataset.category;render();render2GisMarkers();renderHomeLeafletMarkers();});
 document.querySelectorAll('.quick-date').forEach(btn=>btn.addEventListener('click',()=>{
  const next=btn.dataset.date;
@@ -655,8 +659,8 @@ function renderFavorites(tab='masters'){
   const ids=getFavs();
   box.innerHTML=ids.length?`<div class="favorite-masters-list">${ids.map(i=>{const m=masters[i];if(!m)return'';return `<article class="favorite-master" onclick="openProfile(${i})"><img src="${pnEscHtml(m.avatar)}" alt="${pnEscHtml(m.name)}"><div><h3>${pnEscHtml(m.name)}</h3><p>${pnEscHtml(window.PNRanking?.ratingLabel?window.PNRanking.ratingLabel(m):('★ '+m.rating))}${m.experience?' · '+pnEscHtml(m.experience):''}</p><span>⌖ ${pnEscHtml(m.district||'')}</span></div><button onclick="event.stopPropagation();toggleFav(${i})" aria-label="Удалить из избранного">♥</button></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых мастеров</h3><p>Нажмите сердечко на карточке мастера.</p></div>`;
  }else{
-  const keys=getFavWorks();
-  box.innerHTML=keys.length?`<div class="favorite-works-grid">${keys.map(key=>{if(key.startsWith('snap:')){const x=snapIdeas[Number(key.split(':')[1])];if(!x)return'';const m=masters[x.master];return `<article class="favorite-work snap-saved" onclick="openProfile(${x.master})"><button onclick="event.stopPropagation();toggleWorkFav('${key}')">♥</button><div class="saved-work-emoji">${x.emoji}</div><div><b>${x.title}</b><span>${m.name}</span></div></article>`}const [mi,gi]=key.split(':').map(Number);const m=masters[mi];const src=m?.gallery?.[gi]||m?.avatar;if(!m)return'';return `<article class="favorite-work" onclick="openProfile(${mi})"><img src="${src}" alt="Работа ${m.name}"><button onclick="event.stopPropagation();toggleWorkFav('${key}')">♥</button><div><b>${m.name}</b><span>Открыть профиль</span></div></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых работ</h3><p>Нажмите сердечко на фото или дважды коснитесь работы в Работы.</p></div>`;
+  const ids=[...pnSavedWorkIds],feed=masters.filter(Boolean).flatMap(m=>(m.workItems||[]).map(w=>({id:String(w.id),photo:w.image_url,master:m.id,name:m.name})));
+  box.innerHTML=ids.length?`<div class="favorite-works-grid">${ids.map(id=>{const x=feed.find(w=>w.id===id);if(!x)return'';return `<article class="favorite-work" onclick="openProfile(${x.master})"><img src="${pnEscHtml(x.photo)}" alt="Работа ${pnEscHtml(x.name)}"><button onclick="event.stopPropagation();toggleWorkFav('${pnEscHtml(id)}')">♥</button><div><b>${pnEscHtml(x.name)}</b><span>Открыть профиль</span></div></article>`}).join('')}</div>`:`<div class="favorites-empty"><b>♡</b><h3>Нет сохранённых работ</h3><p>Нажмите сердечко на работе.</p></div>`;
  }
 }
 document.querySelectorAll('[data-favorite-tab]').forEach(btn=>btn.addEventListener('click',()=>renderFavorites(btn.dataset.favoriteTab)));
@@ -1028,6 +1032,7 @@ async function pnHydrateRankedDirectory(){
  try{
   if(!window.PNRanking?.hydrate)return;
   await window.PNRanking.hydrate(masters);
+  await pnSyncWorkFavorites();
   render();
   try{await pnLoadHomeBanners()}catch(e){}
   try{render2GisMarkers()}catch(e){}

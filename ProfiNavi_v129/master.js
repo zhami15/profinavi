@@ -129,7 +129,15 @@ async function flushMasterSaves(){
 function saveServices(v){
  jset(SERVICE_KEY,v);
  if(!window.PNData?.replaceMasterServices)return Promise.resolve(v);
- return queueMasterSave(async()=>{await PNData.replaceMasterServices(v);return v});
+ const snapshot=v.map(x=>({...x}));
+ return queueMasterSave(async()=>{
+   const rows=await PNData.replaceMasterServices(snapshot);
+   const current=services();
+   if(Array.isArray(rows)&&rows.length===snapshot.length&&current.length===snapshot.length&&current.every((x,i)=>String(x.name||'')===String(snapshot[i]?.name||''))){
+     const merged=current.map((x,i)=>({...x,id:rows[i]?.id||x.id}));jset(SERVICE_KEY,merged);return merged;
+   }
+   return v;
+ });
 }
 function profile(){return {...DEFAULT_PROFILE,...jget(PROFILE_KEY,{})}}
 function saveProfile(v){
@@ -657,7 +665,7 @@ function editService(i){
  const discount=promo?prompt('Скидка, %',s.discount||20):0;
  data[i]={...s,name,price:Number(price)||0,time,promo,discount:Number(discount)||0};saveServices(data);renderProfile();
 }
-function addService(){let d=services();d.push({name:'Новая услуга',price:1000,time:'1 ч.',promo:'',discount:0,image:null});saveServices(d);renderProfile();setTimeout(()=>openServiceEditor(d.length-1),40)}
+function addService(){openServiceEditor(null,{name:'Новая услуга',price:1000,time:'1 ч.',durationMinutes:60,promo:'',discount:0,image:null})}
 function serviceRows(data){return data.map((s,i)=>`<article class="master-service-edit"><div><b>${masterEsc(s.name)}</b><span>${s.price===0?'0 сом · Ищу моделей':money(s.price)}${s.promo?` · ${masterEsc(s.promo)}${s.discount?` −${s.discount}%`:''}`:''}</span></div><button onclick="openServiceEditor(${i})">Редактировать</button></article>`).join('')}
 
 function editWork(i){
@@ -739,6 +747,7 @@ async function chooseImage(target,index){
       const p=profile();let next=p;
       if(target==='avatar')next={...p,avatar:url};
       else if(target==='cover')next={...p,cover:url};
+      else if(target==='location')next={...p,locationImage:url};
       else if(target==='work'){
         const works=[...(p.works||[])];
         if(Number.isInteger(index))works[index]=url;else works.push(url);
@@ -753,7 +762,7 @@ async function chooseImage(target,index){
   overlay.querySelector('#cameraInput').onchange=e=>useFile(e.target.files?.[0]);
   overlay.querySelector('#galleryInput').onchange=e=>useFile(e.target.files?.[0]);
 }
-function chooseServiceImage(index,cb){
+function chooseServiceImage(index,cb,persist=true){
  const ov=document.createElement('div');ov.className='master-photo-picker-overlay';
  ov.innerHTML=`<div class="master-photo-picker"><div class="picker-handle"></div><h3>Фото услуги</h3><label class="picker-action"><span>📷</span><b>Снять фото</b><input id="sc" type="file" accept="image/*" capture="environment" hidden></label><label class="picker-action"><span>🖼</span><b>Выбрать из галереи</b><input id="sg" type="file" accept="image/*" hidden></label><button class="picker-cancel">Отмена</button></div>`;
  document.body.appendChild(ov);ov.querySelector('.picker-cancel').onclick=()=>ov.remove();
@@ -763,7 +772,7 @@ function chooseServiceImage(index,cb){
    if(!window.PNData?.uploadServiceMedia)throw new Error('Хранилище изображений услуг не загрузилось');
    setPhotoPickerBusy(ov);
    const url=await PNData.uploadServiceMedia(f);let a=services();
-   if(a[index]){a[index].image=url;await saveServices(a)}
+   if(persist&&Number.isInteger(index)&&a[index]){a[index].image=url;await saveServices(a)}
    ov.remove();cb&&cb(url);masterToast('Фото услуги сохранено');
   }catch(e){ov.remove();alert('Не удалось загрузить фото услуги: '+e.message)}
  };
@@ -821,6 +830,11 @@ function removeService(i){
  if(!confirm('Удалить эту услугу?'))return;
  const d=services();d.splice(i,1);saveServices(d);renderProfile();
 }
+function openAboutEditor(){
+ const p=profile(),ov=document.createElement('div');ov.className='master-edit-profile-overlay';
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Самопрезентация</b><button class="edit-save">Готово</button></header><section class="edit-fields"><label class="textarea-label"><span>О мастере</span><textarea id="aboutOnly" maxlength="220">${masterEsc(p.about||'')}</textarea><small><b id="aboutOnlyCount">${(p.about||'').length}</b>/220</small></label></section></div>`;
+ document.body.appendChild(ov);const ta=ov.querySelector('#aboutOnly');ta.oninput=()=>ov.querySelector('#aboutOnlyCount').textContent=ta.value.length;ov.querySelector('.edit-close').onclick=()=>ov.remove();ov.querySelector('.edit-save').onclick=async()=>{await saveProfile({...p,about:ta.value.trim()});ov.remove();renderProfile();masterToast('Самопрезентация сохранена')};
+}
 function editStrengths(){
  const p=profile();
  const presets=['Аккуратность','Современный дизайн','Консультация','Чистая работа','Уютная атмосфера','Скорость','Сложные дизайны','Носка без сколов'];
@@ -833,17 +847,38 @@ function editStrengths(){
  ov.querySelector('#addStrength').onclick=()=>{const inp=ov.querySelector('#customStrength'),v=inp.value.trim();if(v&&!selected.includes(v)){selected.push(v);inp.value='';draw()}};
  ov.querySelector('.edit-close').onclick=()=>ov.remove();ov.querySelector('.edit-save').onclick=()=>{saveProfile({...p,strengths:selected});ov.remove();renderProfile()};draw();
 }
-function openServiceEditor(i){
- const data=services(),s=data[i];if(!s)return;const p=profile();const img=s.image||null;
+function pnServiceDurationParts(s){
+ const total=Math.max(5,Number(s?.durationMinutes)||pnDurationMinutes(s?.time,60)||60);
+ return {hours:Math.floor(total/60),minutes:total%60};
+}
+function pnServiceDurationText(total){
+ const n=Math.max(5,Number(total)||60),h=Math.floor(n/60),m=n%60;
+ return [h?`${h} ч.`:'',m?`${m} мин.`:''].filter(Boolean).join(' ')||'5 мин.';
+}
+function openServiceEditor(i,draft=null){
+ const isNew=!Number.isInteger(i),data=services(),s=isNew?{...(draft||{})}:data[i];if(!s)return;
+ const img=s.image||null,parts=pnServiceDurationParts(s);
+ const hourOptions=Array.from({length:9},(_,h)=>`<option value="${h}" ${h===parts.hours?'selected':''}>${h} ч</option>`).join('');
+ const minuteOptions=Array.from({length:12},(_,k)=>k*5).map(m=>`<option value="${m}" ${m===parts.minutes?'selected':''}>${String(m).padStart(2,'0')} мин</option>`).join('');
  const ov=document.createElement('div');ov.className='master-edit-profile-overlay';
- ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Услуга</b><button class="edit-save">Готово</button></header><section class="service-photo-editor">${img?`<img id="sip" src="${img}">`:`<div id="sip" class="service-image-empty">Фото не добавлено</div>`}<button id="csi">Добавить / изменить фото</button></section><section class="edit-fields"><label><span>Название</span><input id="sn" value="${masterEsc(s.name||'')}"></label><label><span>Обычная цена, сом</span><input id="sp" type="number" min="0" value="${Number(s.price)||0}"></label><label><span>Новая цена, сом</span><input id="snp" type="number" min="0" value="${s.newPrice??''}" placeholder="Если скидки нет — оставьте пустым"></label><div class="auto-discount-row"><span>Скидка</span><b id="sd">—</b></div><label><span>Длительность</span><input id="st" value="${masterEsc(s.time||'')}"></label><label><span>Акция</span><select id="spr"><option value="">Без акции</option><option value="Знакомство с мастером" ${s.promo==='Знакомство с мастером'?'selected':''}>Знакомство с мастером</option><option value="Ищу моделей" ${s.promo==='Ищу моделей'?'selected':''}>Ищу моделей</option><option value="custom" ${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'selected':''}>Своя акция</option></select></label><label id="cpl" style="display:${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'block':'none'}"><span>Название своей акции</span><input id="cp" value="${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?masterEsc(s.promo):''}" placeholder="Напишите название"></label></section><button class="delete-service-btn" id="deleteServiceBtn" type="button">Удалить услугу</button></div>`;
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>${isNew?'Новая услуга':'Услуга'}</b><button class="edit-save">Готово</button></header><section class="service-photo-editor">${img?`<img id="sip" src="${img}">`:`<div id="sip" class="service-image-empty">Фото не добавлено</div>`}<button id="csi">Добавить / изменить фото</button></section><section class="edit-fields"><label><span>Название</span><input id="sn" value="${masterEsc(s.name||'')}"></label><label><span>Обычная цена, сом</span><input id="sp" type="number" min="0" value="${Number(s.price)||0}"></label><label><span>Новая цена, сом</span><input id="snp" type="number" min="0" value="${s.newPrice??''}" placeholder="Если скидки нет — оставьте пустым"></label><div class="auto-discount-row"><span>Скидка</span><b id="sd">—</b></div><div class="duration-picker-field"><span>Длительность</span><div class="duration-wheel-row"><select id="sth">${hourOptions}</select><select id="stm">${minuteOptions}</select></div></div><label><span>Акция</span><select id="spr"><option value="">Без акции</option><option value="Знакомство с мастером" ${s.promo==='Знакомство с мастером'?'selected':''}>Знакомство с мастером</option><option value="Ищу моделей" ${s.promo==='Ищу моделей'?'selected':''}>Ищу моделей</option><option value="custom" ${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'selected':''}>Своя акция</option></select></label><label id="cpl" style="display:${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?'block':'none'}"><span>Название своей акции</span><input id="cp" value="${s.promo&&!['Знакомство с мастером','Ищу моделей'].includes(s.promo)?masterEsc(s.promo):''}" placeholder="Напишите название"></label></section><button class="save-service-btn" id="saveServiceBtn" type="button">Сохранить</button>${isNew?'':`<button class="delete-service-btn" id="deleteServiceBtn" type="button">Удалить услугу</button>`}</div>`;
  document.body.appendChild(ov);const sp=ov.querySelector('#sp'),np=ov.querySelector('#snp'),sd=ov.querySelector('#sd');
  const calc=()=>{let a=+sp.value||0,b=np.value===''?null:+np.value;sd.textContent=(b!==null&&a>0&&b<a)?'-'+Math.round((a-b)/a*100)+'%':'—'};sp.oninput=np.oninput=calc;calc();
  const sel=ov.querySelector('#spr');sel.onchange=()=>ov.querySelector('#cpl').style.display=sel.value==='custom'?'block':'none';
- ov.querySelector('#csi').onclick=()=>chooseServiceImage(i,d=>{const old=ov.querySelector('#sip');if(old.tagName==='IMG')old.src=d;else{const im=document.createElement('img');im.id='sip';im.src=d;old.replaceWith(im)}});ov.querySelector('#deleteServiceBtn').onclick=()=>{ov.remove();removeService(i)};ov.querySelector('.edit-close').onclick=()=>ov.remove();
- ov.querySelector('.edit-save').onclick=()=>{let old=+sp.value||0,has=np.value!=='',nw=has?(+np.value||0):undefined,promo=sel.value;if(promo==='custom')promo=ov.querySelector('#cp').value.trim();data[i]={...services()[i],name:ov.querySelector('#sn').value.trim(),price:old,newPrice:nw,time:ov.querySelector('#st').value.trim(),promo,discount:(has&&old>0&&nw<old)?Math.round((old-nw)/old*100):0};saveServices(data);ov.remove();renderProfile()};
+ let draftImage=s.image||null;
+ ov.querySelector('#csi').onclick=()=>chooseServiceImage(i,d=>{draftImage=d;const old=ov.querySelector('#sip');if(old.tagName==='IMG')old.src=d;else{const im=document.createElement('img');im.id='sip';im.src=d;old.replaceWith(im)}},!isNew);
+ if(!isNew)ov.querySelector('#deleteServiceBtn').onclick=()=>{ov.remove();removeService(i)};
+ ov.querySelector('.edit-close').onclick=()=>ov.remove();
+ const save=async()=>{
+   let old=+sp.value||0,has=np.value!=='',nw=has?(+np.value||0):undefined,promo=sel.value;if(promo==='custom')promo=ov.querySelector('#cp').value.trim();
+   const durationMinutes=(+ov.querySelector('#sth').value||0)*60+(+ov.querySelector('#stm').value||0);
+   if(durationMinutes<=0)return alert('Выберите длительность услуги.');
+   const item={...(isNew?s:services()[i]),name:ov.querySelector('#sn').value.trim()||'Услуга',price:old,newPrice:nw,time:pnServiceDurationText(durationMinutes),durationMinutes,promo,discount:(has&&old>0&&nw<old)?Math.round((old-nw)/old*100):0,image:draftImage};
+   const next=services();if(isNew)next.push(item);else next[i]=item;
+   await saveServices(next);ov.remove();renderProfile();masterToast('Услуга сохранена');
+ };
+ ov.querySelector('#saveServiceBtn').onclick=save;ov.querySelector('.edit-save').onclick=save;
 }
-
 function openWorkActions(i){
  const p=profile(),src=(p.works||[])[i];if(!src)return;
  const ov=document.createElement('div');ov.className='master-photo-picker-overlay';
@@ -887,10 +922,9 @@ function renderReviewCard(r){
 
 function showAllReviews(){
  const p=profile(),reviewList=masterReviewList(),ov=document.createElement('div');ov.className='master-edit-profile-overlay';
- ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">‹ Назад</button><b>Отзывы</b><span></span></header><section class="reviews-full-summary">${reviewList.length?`<strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${Number(p.reviewsCount||reviewList.length)} отзывов</span>`:'<strong>—</strong><span>Пока нет отзывов</span>'}</section><section class="reviews-full-list">${reviewList.length?reviewList.map(renderReviewCard).join(''):'<div class="master-empty">Пока нет отзывов</div>'}</section></div>`;
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">‹ Назад</button><b>Отзывы</b><span></span></header>${reviewList.length?`<section class="reviews-full-summary"><strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${Number(p.reviewsCount||reviewList.length)} отзывов</span></section><section class="reviews-full-list">${reviewList.map(renderReviewCard).join('')}</section>`:`<section class="reviews-full-list"><div class="master-empty">Пока нет отзывов</div></section>`}</div>`;
  document.body.appendChild(ov);ov.querySelector('.edit-close').onclick=()=>ov.remove();
 }
-
 function formatWorkSchedule(p){
  const days=p.workDays||[];
  let dayLabel=p.scheduleType||'Ежедневно';
@@ -899,83 +933,32 @@ function formatWorkSchedule(p){
  return `${dayLabel}, ${open}–${close}`;
 }
 
+const PN_MASTER_DISTRICTS={
+ 'Бишкек':['ЦУМ / Центр','Vefa / Южные ворота','Асанбай','Джал','5 микрорайон','6 микрорайон','7 микрорайон','8 микрорайон','9 микрорайон','10 микрорайон','11 микрорайон','12 микрорайон','Тунгуч','Восток-5','Аламедин-1','Дордой','Кок-Жар','Арча-Бешик','Ак-Орго','Ак-Ордо','Филармония','Политех','Моссовет'],
+ 'Ош':['Центр','Черёмушки','Амир-Темур','Ак-Тилек','Манас-Ата','Туран','Жапалак'],'Манас':['Центр','Спутник','Кок-Арт','Достук'],'Каракол':['Центр','Кашка-Суу','Восход','Пристань-Пржевальск'],'Нарын':['Центр','Север','Юг'],'Талас':['Центр','Север','Юг'],'Баткен':['Центр','Север','Юг']
+};
 function openAddressEditor(){
  const p=profile(),ov=document.createElement('div');ov.className='master-edit-profile-overlay';
- const districts=['Центр','Вефа','Asia Mall','ЦУМ / Дордой Плаза','5 микрорайон','Нижний Джал','Аламедин','Политех','Другой район'];
- const openTimes=['08:00','09:00','10:00','11:00','12:00'];
- const closeTimes=['17:00','18:00','19:00','20:00','21:00','22:00','23:00'];
- const payments=['Наличные','Перевод','Наличные и перевод','Карта','Карта, наличные и перевод'];
- const currentArea=p.area||'Центр';
- const currentOpen=p.openTime||'10:00';
- const currentClose=p.closeTime||'21:00';
- const currentPayment=p.payment||'Наличные и перевод';
- ov.innerHTML=`<div class="master-edit-profile-screen">
-  <header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Адрес и информация</b><button class="edit-save">Готово</button></header>
+ const cities=Object.keys(PN_MASTER_DISTRICTS),payments=['Наличные','Перевод','Наличные и перевод','Карта','Карта, наличные и перевод'];
+ const currentCity=p.city||'Бишкек',currentPayment=p.payment||'Наличные и перевод';pnEditPickedLocation=null;
+ ov.innerHTML=`<div class="master-edit-profile-screen"><header class="edit-profile-head"><button class="edit-close">Отмена</button><b>Адрес и информация</b><button class="edit-save">Готово</button></header>
+  <section class="service-photo-editor">${p.locationImage?`<img id="locationPhotoPreview" src="${p.locationImage}">`:`<div id="locationPhotoPreview" class="service-image-empty">Фото места не добавлено</div>`}<button id="editLocationPhoto" type="button">Добавить / изменить фото</button></section>
   <section class="edit-fields address-editor-fields">
-   <label><span>Район</span><select id="eaArea">${districts.map(x=>`<option ${x===currentArea?'selected':''}>${x}</option>`).join('')}</select></label>
+   <label><span>Город</span><select id="eaCity">${cities.map(x=>`<option value="${x}" ${x===currentCity?'selected':''}>${x}</option>`).join('')}</select></label>
+   <label><span>Район</span><select id="eaArea"></select></label>
    <label><span>Адрес</span><input id="eaAddress" value="${masterEsc(p.address||'')}" placeholder="Улица, дом"></label>
-
-   <div class="edit-group-title">График работы</div>
-   <label><span>Рабочие дни</span><select id="eaScheduleType">
-    <option>Ежедневно</option><option>Будни</option><option>Выходные</option><option>Выбрать дни</option>
-   </select></label>
-   <div id="customDays" class="work-days-picker" style="display:none">
-    ${['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(x=>`<button type="button" data-day="${x}">${x}</button>`).join('')}
-   </div>
-   <div class="time-dropdown-row">
-    <label><span>С</span><select id="eaOpen">${openTimes.map(x=>`<option ${x===currentOpen?'selected':''}>${x}</option>`).join('')}</select></label>
-    <label><span>До</span><select id="eaClose">${closeTimes.map(x=>`<option ${x===currentClose?'selected':''}>${x}</option>`).join('')}</select></label>
-   </div>
-
+   <div class="address-map-editor"><div class="edit-group-title">Точка на карте</div><div class="address-map-help">Нажмите на нужный дом или перетащите маркер.</div><button type="button" id="eaFindAddress" class="secondary">Найти адрес на карте</button><div id="eaLocationMap"></div></div>
    <label><span>Оплата</span><select id="eaPayment">${payments.map(x=>`<option ${x===currentPayment?'selected':''}>${x}</option>`).join('')}</select></label>
    <label><span>Дополнительная информация</span><textarea id="eaInfo" maxlength="180" placeholder="Например: вход со стороны парковки">${masterEsc(p.locationInfo||'')}</textarea></label>
-  </section>
- </div>`;
+  </section></div>`;
  document.body.appendChild(ov);
- const scheduleType=ov.querySelector('#eaScheduleType'), customDays=ov.querySelector('#customDays');
- if(scheduleType){
-   scheduleType.value=p.scheduleType||'Ежедневно';
-   const saved=(p.workDays||[]).map(pnWorkDayCode).filter(Boolean);
-   ov.querySelectorAll('#customDays button').forEach(b=>{
-     b.classList.toggle('active',saved.includes(b.dataset.day));
-     b.onclick=()=>b.classList.toggle('active');
-   });
-   customDays.style.display=scheduleType.value==='Выбрать дни'?'flex':'none';
-   scheduleType.onchange=()=>customDays.style.display=scheduleType.value==='Выбрать дни'?'flex':'none';
- }
- ov.querySelector('.edit-close').onclick=()=>ov.remove();
- ov.querySelector('.edit-save').onclick=async()=>{
-   const saveBtn=ov.querySelector('.edit-save'),oldLabel=saveBtn?.textContent||'Готово';
-   try{
-    if(!window.PNData)throw new Error('База данных не загрузилась');
-    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Сохраняем…'}
-    const openTime=ov.querySelector('#eaOpen').value;
-    const closeTime=ov.querySelector('#eaClose').value;
-    if(openTime>=closeTime)throw new Error('Время окончания должно быть позже времени начала');
-    const newAddress=ov.querySelector('#eaAddress').value.trim();
-    const newArea=ov.querySelector('#eaArea').value;
-    const scheduleTypeValue=ov.querySelector('#eaScheduleType')?.value||'Ежедневно';
-    const workDays=(()=>{if(scheduleTypeValue==='Ежедневно')return ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];if(scheduleTypeValue==='Будни')return ['ПН','ВТ','СР','ЧТ','ПТ'];if(scheduleTypeValue==='Выходные')return ['СБ','ВС'];return [...ov.querySelectorAll('#customDays button.active')].map(b=>b.dataset.day)})();
-    if(scheduleTypeValue==='Выбрать дни'&&!workDays.length)throw new Error('Выберите хотя бы один рабочий день');
-    let geo=pnEditPickedLocation?{found:true,lat:pnEditPickedLocation.lat,lng:pnEditPickedLocation.lng}:{found:false};
-    if(!geo.found){try{if(newAddress)geo=await pnGeocodeAddress(newAddress,p.city||'Бишкек')}catch(e){console.warn('geocode',e)}}
-    const oldCfg=pnScheduleConfigFromProfile(p);
-    const next={...p,scheduleType:scheduleTypeValue,workDays,area:newArea,address:newAddress,lat:geo?.found?geo.lat:p.lat,lng:geo?.found?geo.lng:p.lng,openTime,closeTime,hours:`${openTime}–${closeTime}`,payment:ov.querySelector('#eaPayment').value,locationInfo:ov.querySelector('#eaInfo').value.trim(),scheduleStep:Number(p.scheduleStep)||Number(masterScheduleConfig?.step)||60};
-    const newCfg=pnScheduleConfigFromProfile(next);
-    await saveProfile(next);
-    if(!pnSameSchedule(oldCfg,newCfg)){
-      masterScheduleConfig=newCfg;jset('pn_master_schedule_config',newCfg);
-      // Editing the general work schedule is an intentional reset of the future recurring grid.
-      const rebuilt=pnBuildScheduleHorizon(newCfg,{},62,false);jset(SLOT_KEY,rebuilt);
-      await queueLatestSlots();await flushMasterSaves();
-    }
-    const check=await PNData.loadMasterBundle();
-    const serverCfg=check?.profile?.schedule_config||{};
-    if(!pnSameSchedule(newCfg,{days:serverCfg.days,workDays:serverCfg.workDays,start:serverCfg.start,end:serverCfg.end,step:serverCfg.step}))throw new Error('Supabase не подтвердил новый график');
-    pnEditPickedLocation=null;ov.remove();renderProfile();masterToast('Профиль и график сохранены в базе');
-   }catch(e){console.warn('profile schedule save',e);masterToast('Не удалось сохранить: '+(e?.message||e),true);alert('Не удалось сохранить изменения в базе.\n'+(e?.message||e))}
-   finally{if(saveBtn&&document.body.contains(saveBtn)){saveBtn.disabled=false;saveBtn.textContent=oldLabel}}
- };
+ const city=ov.querySelector('#eaCity'),area=ov.querySelector('#eaArea'),address=ov.querySelector('#eaAddress');
+ const fillAreas=()=>{const list=PN_MASTER_DISTRICTS[city.value]||['Центр','Север','Юг','Восток','Запад'];area.innerHTML='<option value="">Выберите район</option>'+list.map(x=>`<option value="${x}">${x}</option>`).join('');if(city.value===currentCity&&list.includes(p.area))area.value=p.area;};fillAreas();city.onchange=fillAreas;
+ ov.querySelector('#editLocationPhoto').onclick=()=>{ov.remove();chooseImage('location')};
+ ov.querySelector('.edit-close').onclick=()=>{pnEditPickedLocation=null;ov.remove()};
+ const initMap=async()=>{if(!window.PNMap)return;const initial=(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))?[Number(p.lat),Number(p.lng)]:null;await PNMap.pick(ov.querySelector('#eaLocationMap'),initial,x=>pnEditPickedLocation=x)};initMap().catch(e=>console.warn('address map',e));
+ ov.querySelector('#eaFindAddress').onclick=async()=>{try{const g=await pnGeocodeAddress(address.value.trim(),city.value||'Бишкек');if(!g?.found)return alert('Адрес не найден. Поставьте точку вручную.');pnEditPickedLocation={lat:g.lat,lng:g.lng};await PNMap.pick(ov.querySelector('#eaLocationMap'),[g.lat,g.lng],x=>pnEditPickedLocation=x)}catch(e){alert('Адрес не найден. Поставьте точку вручную на карте.')}};
+ ov.querySelector('.edit-save').onclick=async()=>{const saveBtn=ov.querySelector('.edit-save'),oldLabel=saveBtn.textContent;try{saveBtn.disabled=true;saveBtn.textContent='Сохраняем…';const newAddress=address.value.trim();if(!city.value||!area.value||!newAddress)throw new Error('Заполните город, район и адрес');let geo=pnEditPickedLocation;if(!geo){const g=await pnGeocodeAddress(newAddress,city.value);if(g?.found)geo={lat:g.lat,lng:g.lng}}if(!geo)throw new Error('Укажите точку на карте');const next={...p,city:city.value,area:area.value,address:newAddress,lat:geo.lat,lng:geo.lng,payment:ov.querySelector('#eaPayment').value,locationInfo:ov.querySelector('#eaInfo').value.trim()};await saveProfile(next);pnEditPickedLocation=null;ov.remove();renderProfile();setTimeout(pnMasterOwnMap,100);masterToast('Адрес сохранён в базе')}catch(e){masterToast('Не удалось сохранить: '+(e?.message||e),true);alert('Не удалось сохранить изменения в базе.\n'+(e?.message||e))}finally{if(document.body.contains(saveBtn)){saveBtn.disabled=false;saveBtn.textContent=oldLabel}}};
 }
 function canLeaveVerifiedReview(booking){
  return !!(booking && (booking.status==='completed'||booking.status==='done') && booking.clientId);
@@ -1015,12 +998,12 @@ function renderProfile(){
    <section class="profile-summary-card">
      <div class="master-avatar-edit">
        <img class="profile-main-avatar" src="${p.avatar}" alt="Фото ${masterEsc(p.name)}">
-       <button onclick="chooseImage('avatar')" aria-label="Изменить фото">✎</button>
+       
      </div>
      <div class="profile-summary-main">
        <h1>${masterEsc(p.name)}</h1>
        <p>${p.area ? `Район: ${masterEsc(p.area)}` : 'Район не указан'}</p>
-       <div class="profile-rating"><span>${reviews?`★ ${Number(p.rating||0).toFixed(1)} (${reviews})`:'Нет отзывов'}</span><button class="reviews-link" onclick="showAllReviews()">${reviews} отзывов</button></div>
+       <div class="profile-rating"><span>★ ${Number(p.rating||0).toFixed(1)} (${reviews})</span><button class="reviews-link" onclick="showAllReviews()">${reviews} отзывов</button></div>
        <button class="master-publish-btn ${p.is_published?'is-published':''}" type="button" onclick="toggleMasterPublish()">${p.is_published?'✓ Профиль опубликован':'Опубликовать профиль'}</button>
      </div>
    </section>
@@ -1045,24 +1028,21 @@ function renderProfile(){
      </section>
 
      <section id="mp-about" class="profile-pane profile-section">
-       <div class="inline-profile-head"><h2>О мастере</h2><button class="master-profile-edit-icon" onclick="openProfileEditor()">✎</button></div>
-       <div class="profile-info-block"><h3>Самопрезентация</h3><p>${masterEsc(p.about||'Расскажите немного о себе.')}</p></div>
-       <div class="profile-info-block"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3><button class="text-btn" onclick="editStrengths()">Изменить</button></div><div class="tag-cloud">${(p.strengths||[]).length?(p.strengths||[]).map(x=>`<span>${masterEsc(x)}</span>`).join(''):`<button class="empty-strengths" onclick="editStrengths()">Выбрать сильные стороны</button>`}</div></div>
+       <div class="inline-profile-head"><h2>О мастере</h2></div>
+       <button class="profile-info-block profile-info-clickable" type="button" onclick="openAboutEditor()"><h3>Самопрезентация</h3><p>${masterEsc(p.about||'Расскажите немного о себе.')}</p></button>
+       <button class="profile-info-block profile-info-clickable" type="button" onclick="editStrengths()"><div class="inline-profile-head strengths-title"><h3>Сильные стороны</h3></div><div class="tag-cloud">${(p.strengths||[]).length?(p.strengths||[]).map(x=>`<span>${masterEsc(x)}</span>`).join(''):`<span class="empty-strengths">Выбрать сильные стороны</span>`}</div></button>
      </section>
 
      <section id="mp-reviews" class="profile-pane profile-section">
-       <div class="inline-profile-head"><h2>Отзывы</h2><button class="text-btn" onclick="showAllReviews()">Все отзывы</button></div>
-       ${reviews?`<div class="reviews-score"><strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${reviews} отзывов</span></div>`:'<div class="master-empty">Пока нет подтверждённых отзывов</div>'}
-       ${reviewList.slice(0,2).map(renderReviewCard).join('')||'<div class="master-empty">Пока нет отзывов</div>'}
-       <button class="show-all-reviews" onclick="showAllReviews()">Показать все отзывы</button>
-       <p class="master-review-note">Отзывы мастером не редактируются.</p>
+       <div class="inline-profile-head"><h2>Отзывы</h2></div>
+       ${reviews?`<div class="reviews-score"><strong>${Number(p.rating||0).toFixed(1)}</strong><div class="rating-summary-star">★</div><span>${reviews} отзывов</span></div>${reviewList.slice(0,2).map(renderReviewCard).join('')}`:'<div class="master-empty">Пока нет отзывов</div>'}
      </section>
 
      <section id="mp-address" class="profile-pane profile-section">
        <div class="inline-profile-head"><h2>Адрес и информация</h2><button class="text-btn" onclick="openAddressEditor()">Изменить</button></div>
-       <div class="salon-photo" style="background-image:url('${gallery[1]||cover}')"></div>
+       <div class="salon-photo" style="background-image:url('${p.locationImage||gallery[1]||cover}')"></div>
        <h3>${masterEsc(p.name)}</h3>
-       <div class="access-list"><p>◷ ${masterEsc(formatWorkSchedule(p))}</p><p>₸ ${masterEsc(p.payment||'Наличными и переводом')}</p>${p.locationInfo?`<p>ⓘ ${masterEsc(p.locationInfo)}</p>`:''}</div>
+       <div class="access-list"><p>⌂ ${masterEsc(p.city||'Бишкек')}${p.area?` · ${masterEsc(p.area)}`:''}</p><p>₸ ${masterEsc(p.payment||'Наличными и переводом')}</p>${p.locationInfo?`<p>ⓘ ${masterEsc(p.locationInfo)}</p>`:''}</div>
        <div class="profile-map-wrap"><div class="master-map-preview exact-map"><div><b>📍 ${masterEsc(p.address||p.area||'Бишкек')}</b>${p.area?`<span>Район: ${masterEsc(p.area)}</span>`:''}</div></div></div>
      </section>
    </main>
@@ -1309,41 +1289,6 @@ window.addEventListener('pageshow',()=>setTimeout(pnMasterOwnMap,250));
 
 
 let pnEditPickedLocation=null;
-document.addEventListener('click',e=>{
-  const t=e.target;
-  if(!t)return;
-  if((t.textContent||'').trim().toLowerCase().includes('адрес') || t.id==='editAddress'){
-    setTimeout(async()=>{
-      const address=document.getElementById('eaAddress');
-      if(!address||document.getElementById('eaLocationMap'))return;
-      const wrap=document.createElement('div');
-      wrap.style.cssText='margin-top:12px';
-      wrap.innerHTML='<div style="font-weight:700;margin-bottom:6px">Точка на карте</div><div style="font-size:13px;color:#777;margin-bottom:8px">Нажмите на дом или перетащите маркер.</div><button type="button" id="eaFindAddress" class="secondary" style="width:100%;margin-bottom:8px">Найти введённый адрес</button><div id="eaLocationMap" style="height:250px;border-radius:18px;overflow:hidden;background:#f2f2f2"></div>';
-      address.parentElement.appendChild(wrap);
-      const p=profile();
-      const initial=(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))?[Number(p.lat),Number(p.lng)]:null;
-      await PNMap.pick(document.getElementById('eaLocationMap'),initial,async x=>{
-        const previous=pnEditPickedLocation; pnEditPickedLocation=x;
-        if(previous){
-          try{
-            const r=await pnReverseGeocode(x.lat,x.lng);
-            if(r?.found&&r.address&&r.address!==address.value.trim()){
-              if(confirm('Точка перемещена.\nНовый адрес: '+r.address+'\n\nПодтвердить этот адрес?')) address.value=r.address;
-            }
-          }catch(e){console.warn('reverse geocode',e)}
-        }
-      });
-      document.getElementById('eaFindAddress').onclick=async()=>{
-        try{
-          const g=await pnGeocodeAddress(address.value.trim(),p.city||'Бишкек');
-          if(!g?.found)return alert('Адрес не найден. Поставьте точку вручную.');
-          pnEditPickedLocation={lat:g.lat,lng:g.lng};
-          await PNMap.pick(document.getElementById('eaLocationMap'),[g.lat,g.lng],x=>pnEditPickedLocation=x);
-        }catch(err){alert('Поставьте точку вручную на карте.')}
-      };
-    },80);
-  }
-});
 
 window.addEventListener('DOMContentLoaded',async()=>{try{if(window.PNBackendSync&&session()?.userId){await pnMigrateLegacyLocalMedia();await PNBackendSync.hydrateMasterCache();masterScheduleConfig=jget('pn_master_schedule_config',masterScheduleConfig);await Promise.all([pnHydrateMasterChatsFromBackend(),pnHydrateMasterSupport()]);const f=location.pathname.split('/').pop();if(f==='master.html')renderDashboard();else if(f==='master-profile.html')renderProfile();else if(f==='master-bookings.html')renderBookings();else if(f==='master-chats.html')renderChats();else if(f==='master-analytics.html')renderAnalytics()}}catch(e){console.warn('backend hydrate',e);masterToast('Не удалось синхронизировать профиль: '+e.message,true)}});
 window.addEventListener('DOMContentLoaded',()=>{

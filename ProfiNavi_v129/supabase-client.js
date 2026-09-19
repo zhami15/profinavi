@@ -235,7 +235,7 @@ window.PNData={
  },
  async listPublicDirectory(){
   const {data:profiles,error}=await pnSupabase.from('master_profiles')
-    .select('user_id,legacy_id,profile_name,city,area,address,latitude,longitude,bio,experience_text,categories,avatar_url,cover_url,strengths_tags,payment,location_info,schedule_config,rating,reviews_count,rating_confidence,top_score,ranking_breakdown,is_published,created_at')
+    .select('user_id,legacy_id,profile_name,city,area,address,latitude,longitude,bio,experience_text,categories,avatar_url,cover_url,location_image_url,strengths_tags,payment,location_info,schedule_config,rating,reviews_count,rating_confidence,top_score,ranking_breakdown,is_published,created_at')
     .eq('is_published',true).order('top_score',{ascending:false});
   if(error)throw error;if(!profiles?.length)return [];
   const ids=profiles.map(x=>x.user_id),legacyIds=profiles.map(x=>Number(x.legacy_id)).filter(Number.isFinite);
@@ -297,7 +297,7 @@ Object.assign(window.PNData,{
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;
   const reqs=[
    pnSupabase.from('master_profiles').select('*').eq('user_id',uid).maybeSingle(),
-   pnSupabase.from('services').select('*').eq('master_id',uid).order('sort_order'),
+   pnSupabase.from('services').select('*').eq('master_id',uid).eq('is_active',true).order('sort_order'),
    pnSupabase.from('works').select('*').eq('master_id',uid).order('sort_order'),
    pnSupabase.from('availability_slots').select('*').eq('master_id',uid).gte('ends_at',new Date(Date.now()-86400000).toISOString()).order('starts_at'),
    pnSupabase.from('bookings').select('*').eq('master_id',uid).order('starts_at'),
@@ -312,6 +312,7 @@ Object.assign(window.PNData,{
    latitude:Number.isFinite(Number(input.lat))?Number(input.lat):null,longitude:Number.isFinite(Number(input.lng))?Number(input.lng):null,bio:input.about||null,
    experience_text:input.experience||null,strengths_tags:Array.isArray(input.strengths)?input.strengths:[],
    avatar_url:String(input.avatar||'').startsWith('http')?input.avatar:null,cover_url:String(input.cover||'').startsWith('http')?input.cover:null,
+   location_image_url:String(input.locationImage||'').startsWith('http')?input.locationImage:null,
    payment:input.payment||null,location_info:input.locationInfo||null,
    schedule_config:{days:input.scheduleType||'Ежедневно',workDays:input.workDays||[],start:input.openTime||'10:00',end:input.closeTime||'19:00',step:Number(input.scheduleStep)||60},updated_at:new Date().toISOString()};
   const {data,error}=await pnSupabase.from('master_profiles').upsert(row,{onConflict:'user_id'}).select().single();if(error)throw error;return data;
@@ -322,11 +323,24 @@ Object.assign(window.PNData,{
  },
  async replaceMasterServices(items){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;
-  const {error:d}=await pnSupabase.from('services').delete().eq('master_id',uid);if(d)throw d;
-  const rows=(items||[]).map((x,i)=>({master_id:uid,name:(x.name||'Услуга').trim(),description:x.desc||null,price:Number(x.price)||0,
+  const {data:existing,error:readError}=await pnSupabase.from('services').select('*').eq('master_id',uid).order('sort_order');if(readError)throw readError;
+  const current=existing||[],used=new Set(),result=[];
+  const payload=(x,i)=>({master_id:uid,name:(x.name||'Услуга').trim(),description:x.desc||null,price:Number(x.price)||0,
    new_price:(x.newPrice!==undefined&&x.newPrice!==null&&String(x.newPrice)!=='')?Number(x.newPrice):null,promo_label:x.promo||null,
-   image_url:String(x.image||'').startsWith('http')?x.image:null,duration_text:x.time||null,duration_minutes:pnDurationMinutes(x.durationMinutes??x.time,60),is_active:true,sort_order:i}));
-  if(!rows.length)return[];const {data,error}=await pnSupabase.from('services').insert(rows).select();if(error)throw error;return data||[];
+   image_url:String(x.image||'').startsWith('http')?x.image:null,duration_text:x.time||null,duration_minutes:pnDurationMinutes(x.durationMinutes??x.time,60),is_active:true,sort_order:i,updated_at:new Date().toISOString()});
+  for(let i=0;i<(items||[]).length;i++){
+   const x=items[i]||{};
+   let row=x.id?current.find(r=>r.id===x.id&&!used.has(r.id)):null;
+   if(!row)row=current.find(r=>!used.has(r.id)&&r.is_active!==false&&Number(r.sort_order)===i&&String(r.name||'')===String(x.name||''));
+   if(row){
+    used.add(row.id);const {data,error}=await pnSupabase.from('services').update(payload(x,i)).eq('id',row.id).eq('master_id',uid).select().single();if(error)throw error;result.push(data);
+   }else{
+    const {data,error}=await pnSupabase.from('services').insert(payload(x,i)).select().single();if(error)throw error;used.add(data.id);result.push(data);
+   }
+  }
+  const deactivate=current.filter(r=>r.is_active!==false&&!used.has(r.id)).map(r=>r.id);
+  if(deactivate.length){const {error}=await pnSupabase.from('services').update({is_active:false,updated_at:new Date().toISOString()}).eq('master_id',uid).in('id',deactivate);if(error)throw error}
+  return result;
  },
  async replaceMasterWorks(urls){
   const user=await PNAuth.currentUser();if(!user)throw new Error('Нет активной сессии');const uid=user.id;
@@ -456,7 +470,7 @@ window.PNBackendSync={
  },
  async hydratePublicMasterCache(legacyId=0){
   const b=await PNData.loadPublicMasterBundle(legacyId);if(!b)return null;const p=b.profile;let c={};try{c=JSON.parse(localStorage.getItem(`pn_master_profile_${legacyId}`)||'{}')}catch(e){}
-  c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),saves:Number(p.saves_count??0),createdAt:p.created_at,is_published:!!p.is_published};
+  c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,locationImage:p.location_image_url||c.locationImage,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),saves:Number(p.saves_count??0),createdAt:p.created_at,is_published:!!p.is_published};
   c.works=(b.works||[]).map(x=>x.image_url).filter(Boolean);localStorage.setItem(`pn_master_profile_${legacyId}`,JSON.stringify(c));
   localStorage.setItem(`pn_master_services_${legacyId}`,JSON.stringify((b.services||[]).map(x=>({id:x.id,name:x.name,desc:x.description||'',price:Number(x.price)||0,newPrice:x.new_price===null?null:Number(x.new_price),promo:x.promo_label||'',time:x.duration_text||'',durationMinutes:Number(x.duration_minutes)||pnDurationMinutes(x.duration_text,60),image:x.image_url||null}))));
   if(legacyId===0)localStorage.setItem('pn_master_services_0',localStorage.getItem(`pn_master_services_${legacyId}`)||'[]');
@@ -468,7 +482,7 @@ window.PNBackendSync={
   const b=await PNData.loadMasterBundle();
   if(b.profile){let c={};try{c=JSON.parse(localStorage.getItem('pn_master_profile_0')||'{}')}catch(e){}const p=b.profile;
    c={...c,user_id:p.user_id,name:p.profile_name||c.name,profileName:p.profile_name||c.profileName,city:p.city||c.city,area:p.area||'',address:p.address||'',lat:p.latitude,lng:p.longitude,
-    about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,
+    about:p.bio||c.about,experience:p.experience_text||c.experience,strengths:p.strengths_tags||c.strengths||[],avatar:p.avatar_url||c.avatar,cover:p.cover_url||c.cover,locationImage:p.location_image_url||c.locationImage,
     payment:p.payment||c.payment,locationInfo:p.location_info||c.locationInfo,scheduleType:p.schedule_config?.days||c.scheduleType,workDays:p.schedule_config?.workDays||c.workDays,
     openTime:p.schedule_config?.start||c.openTime,closeTime:p.schedule_config?.end||c.closeTime,scheduleStep:Number(p.schedule_config?.step)||c.scheduleStep||60,rating:Number(p.rating??0),reviewsCount:Number(p.reviews_count??0),ratingConfidence:Number(p.rating_confidence??0),topScore:Number(p.top_score??0),saves:Number(p.saves_count??0),createdAt:p.created_at,is_published:!!p.is_published};localStorage.setItem('pn_master_profile_0',JSON.stringify(c));
    if(p.schedule_config)localStorage.setItem('pn_master_schedule_config',JSON.stringify({days:p.schedule_config.days||'Ежедневно',workDays:Array.isArray(p.schedule_config.workDays)?p.schedule_config.workDays:[],start:p.schedule_config.start||'10:00',end:p.schedule_config.end||'19:00',step:Number(p.schedule_config.step)||60}))}

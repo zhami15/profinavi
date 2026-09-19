@@ -481,7 +481,7 @@ function renderDashboard(){
  const todayList=bookings.filter(b=>sameDay(b.date,today)), pending=bookings.filter(b=>b.status==='pending'), confirmed=todayList.filter(b=>b.status==='confirmed');
  const revenue=confirmed.reduce((s,b)=>s+bookingRevenue(b),0), key=today.toISOString().slice(0,10), slots=getSlots()[key]||[];
  root.innerHTML=`${masterHeader('Здравствуйте, '+(p.ownerName||session()?.name||p.name),'')}
- <section class="master-metrics"><article><small>Сегодня</small><b>${todayList.length}</b><span>записей</span></article><article><small>Доход</small><b>${money(revenue).replace(' сом','')}</b><span>сом</span></article><article><small>Рейтинг</small><b>${Number(p.reviewsCount||0)>0?Number(p.rating||0).toFixed(1):'—'}</b><span>${Number(p.reviewsCount||0)>0?'★':'нет отзывов'}</span></article></section>
+ <section class="master-metrics"><article><small>Сегодня</small><b>${todayList.length}</b><span>записей</span></article><article><small>Доход</small><b>${money(revenue).replace(' сом','')}</b><span>сом</span></article><article><small>Рейтинг</small><b>${Number(p.rating||0).toFixed(1)}</b><span>${Number(p.reviewsCount||0)>0?'★':'нет отзывов'}</span></article></section>
 
  <section class="master-section quick-approval-section">
    <div class="master-section-head"><h2>Подтвердить записи</h2>${pending.length?`<span class="pending-count">${pending.length}</span>`:''}</div>
@@ -569,10 +569,13 @@ function openChat(id){
      ${closed?`<div class="chat-closed-notice"><strong>Чат закрыт</strong><p>${current.status==='cancelled'||current.status==='declined'?'Запись отменена.':'Прошло 72 часа после времени записи.'}</p></div>`:''}
    </div>
 
-   ${!closed?`<div class="quick-replies">
-     <button type="button" data-reply="Здравствуйте! Да, время свободно 😊">Время свободно</button>
+   ${!closed?`<div class="master-quick-replies-label">Быстрые ответы</div>
+   <div class="quick-replies">
+     <button type="button" data-reply="Здравствуйте! Запись вижу 😊">Запись вижу</button>
      <button type="button" data-reply="Спасибо за запись! Буду ждать вас 🤍">Буду ждать</button>
-     <button type="button" data-reply="Можете, пожалуйста, уточнить желаемый дизайн?">Уточнить дизайн</button>
+     <button type="button" data-reply="Пожалуйста, приходите за 5–10 минут до записи.">Прийти заранее</button>
+     <button type="button" data-reply="Если планы изменятся, пожалуйста, сообщите заранее.">Если планы изменятся</button>
+     <button type="button" data-reply="Можете, пожалуйста, прислать фото желаемого результата?">Прислать фото</button>
      <button type="button" data-reply="К сожалению, это время уже недоступно. Могу предложить другое.">Другое время</button>
    </div>
    <form class="master-chat-compose chat-media-form" id="chatForm">

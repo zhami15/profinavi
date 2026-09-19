@@ -3056,3 +3056,27 @@ body.works-cropping{overflow:hidden;touch-action:none}
 .duration-picker-field{padding:13px 0;border-bottom:1px solid #eee6eb}.duration-picker-field>span{display:block;font-size:11px;color:var(--muted);margin-bottom:8px}.duration-wheel-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.duration-wheel-row select{appearance:auto;background:#f8f6f7;border:1px solid #eadfe5;border-radius:14px;padding:13px 12px;font-size:16px;text-align:center}
 .profile-info-clickable{display:block;width:100%;border:0;text-align:left;color:inherit;font:inherit;cursor:pointer}.profile-info-clickable h3{margin-top:0}.profile-info-clickable .tag-cloud{pointer-events:none}
 .address-map-editor{padding:14px 0}.address-map-help{font-size:13px;color:#777;margin:0 0 8px}.address-map-editor .secondary{width:100%;margin-bottom:8px}.address-map-editor #eaLocationMap{height:260px;border-radius:18px;overflow:hidden;background:#f2f2f2}
+
+/* v151 master.html: keep KPI spacing fix; calendar restored to v149 behavior */
+.master-app-page[data-master-page="home"] .master-metrics{
+  margin-top:17px;
+}
+
+/* v152 master-bookings.html only: match the day strip top spacing to its bottom spacing */
+.master-app-page[data-master-page="bookings"] .master-days{
+  margin-top:12px;
+}
+
+
+/* v153 master-chats.html only: give the chat list breathing room below the header */
+.master-app-page[data-master-page="chats"] .master-chat-list{
+  margin-top:12px;
+}
+.master-quick-replies-label{
+  padding:8px 12px 0;
+  background:#fff;
+  color:var(--muted);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.02em;
+}

@@ -1,39 +1,72 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ProfiNavi Admin — мастера</title><link rel="stylesheet" href="style.css"><link rel="icon" href="icon.svg" type="image/svg+xml"><meta name="theme-color" content="#ff4fa3"></head>
-<body class="admin-page"><main class="admin-shell"><header class="admin-top"><div><small>PROFINAVI ADMIN</small><h1>Мастера</h1><p id="adminIdentity">Проверяем доступ…</p></div><div class="admin-top-actions"><a class="admin-support-nav" href="admin-support.html">Поддержка <b id="adminSupportBadge" class="hidden">0</b></a><button id="adminLogout" class="admin-logout-btn">Выйти</button></div></header>
-<section class="admin-toolbar"><input id="adminSearch" placeholder="Поиск по имени, телефону или ID"><button id="adminReload">Обновить</button></section>
-<section class="admin-home-banners" aria-labelledby="adminHomeBannersTitle">
-  <div class="admin-home-banners-head"><div><small>CLIENT.HTML</small><h2 id="adminHomeBannersTitle">Баннеры главной</h2><p>Три изображения для карусели BEAUTY NAVIGATOR.</p></div></div>
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ProfiNavi Admin</title><link rel="stylesheet" href="style.css"><link rel="icon" href="icon.svg" type="image/svg+xml"><meta name="theme-color" content="#ff4fa3"></head>
+<body class="admin-page admin-dashboard-page"><main class="admin-shell"><header class="admin-top"><div><small>PROFINAVI ADMIN</small><h1 id="adminPageTitle">Мастера</h1><p id="adminIdentity">Проверяем доступ…</p></div><div class="admin-top-actions"><a class="admin-support-nav" href="admin-support.html">Поддержка <b id="adminSupportBadge" class="hidden">0</b></a><button id="adminLogout" class="admin-logout-btn">Выйти</button></div></header>
+<section class="admin-toolbar"><input id="adminSearch" placeholder="Поиск по имени, телефону или ID"><button id="adminReload">Поиск</button></section>
+<nav class="admin-dashboard-tabs" aria-label="Разделы админ-панели">
+  <button class="active" data-admin-view="masters">Мастера</button>
+  <button data-admin-view="clients">Клиенты</button>
+</nav>
+<section id="adminBannersSection" class="admin-home-banners" aria-labelledby="adminHomeBannersTitle">
+  <div class="admin-home-banners-head"><div><h2 id="adminHomeBannersTitle">Баннеры главной</h2></div></div>
   <div id="adminHomeBannersGrid" class="admin-home-banners-grid"><div class="admin-loading">Загружаем баннеры…</div></div>
 </section>
-<div id="adminStats" class="admin-stats"></div><section id="adminMasters" class="admin-master-list"><div class="admin-loading">Загружаем мастеров…</div></section></main>
+<div id="adminStats" class="admin-stats"></div>
+<section id="adminMasters" class="admin-master-list"><div class="admin-loading">Загружаем мастеров…</div></section>
+<section id="adminClients" class="admin-master-list hidden"><div class="admin-loading">Загружаем клиентов…</div></section>
+</main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0"></script><script src="supabase-client.js"></script><script src="pn-admin.js"></script><script>
-const host=document.getElementById('adminMasters'),search=document.getElementById('adminSearch'),bannerHost=document.getElementById('adminHomeBannersGrid');let all=[],homeBanners=[];
-function status(m){if(m.is_blocked)return'<span class="admin-badge blocked">Заблокирован</span>';if(m.is_published)return'<span class="admin-badge live">Опубликован</span>';return'<span class="admin-badge draft">Черновик</span>'}
-function render(){const q=search.value.trim().toLowerCase(),rows=all.filter(m=>!q||[m.profile_name,m.contact?.name,m.contact?.phone,m.legacy_id,m.user_id].some(v=>String(v||'').toLowerCase().includes(q)));host.innerHTML=rows.length?rows.map(m=>`<article class="admin-master-card"><img src="${PNAdmin.esc(m.avatar_url||'icon-192.png')}" alt=""><div class="admin-master-copy"><div class="admin-master-title"><h2>${PNAdmin.esc(m.profile_name||m.contact?.name||'Без имени')}</h2>${status(m)}</div><p>${PNAdmin.esc(m.contact?.phone||'Телефон не указан')} · ID ${PNAdmin.esc(m.legacy_id??'—')}</p><small>Рейтинг: ${Number(m.rating||0).toFixed(2)} · отзывов ${Number(m.reviews_count||0)}</small></div><div class="admin-card-actions"><a href="admin-master.html?id=${encodeURIComponent(m.legacy_id)}">Редактировать</a><a class="light" target="_blank" href="profile.html?id=${encodeURIComponent(m.legacy_id)}">Профиль</a></div></article>`).join(''):'<div class="admin-empty">Ничего не найдено</div>';
- document.getElementById('adminStats').innerHTML=`<div><b>${all.length}</b><span>Всего мастеров</span></div><div><b>${all.filter(x=>x.is_published&&!x.is_blocked).length}</b><span>Опубликовано</span></div><div><b>${all.filter(x=>x.is_blocked).length}</b><span>Заблокировано</span></div>`}
-async function load(){host.innerHTML='<div class="admin-loading">Загружаем мастеров…</div>';try{const u=await PNAdmin.requireAdmin();document.getElementById('adminIdentity').textContent=(u.app_metadata?.admin_name||'Admin')+' · '+(u.phone||u.user_metadata?.phone||'');all=await PNAdmin.listMasters();render()}catch(e){host.innerHTML='<div class="admin-error-box">'+PNAdmin.esc(e.message)+'</div>'}}
+const masterHost=document.getElementById('adminMasters'),clientHost=document.getElementById('adminClients'),search=document.getElementById('adminSearch'),bannerHost=document.getElementById('adminHomeBannersGrid'),bannersSection=document.getElementById('adminBannersSection'),stats=document.getElementById('adminStats'),pageTitle=document.getElementById('adminPageTitle');
+let masters=[],clients=[],homeBanners=[],currentView='masters',clientsLoaded=false;
+function masterStatus(m){if(m.is_blocked)return'<span class="admin-badge blocked">Заблокирован</span>';if(m.is_published)return'<span class="admin-badge live">Опубликован</span>';return'<span class="admin-badge draft">Черновик</span>'}
+function clientStatus(c){return c.blocked?'<span class="admin-badge blocked">Заблокирован</span>':'<span class="admin-badge live">Активен</span>'}
+function queryMatches(values){const q=search.value.trim().toLowerCase();return !q||values.some(v=>String(v||'').toLowerCase().includes(q))}
+function renderMasters(){
+ const rows=masters.filter(m=>queryMatches([m.profile_name,m.contact?.name,m.contact?.phone,m.legacy_id,m.user_id]));
+ masterHost.innerHTML=rows.length?rows.map(m=>`<article class="admin-master-card"><img src="${PNAdmin.esc(m.avatar_url||'icon-192.png')}" alt=""><div class="admin-master-copy"><div class="admin-master-title"><h2>${PNAdmin.esc(m.profile_name||m.contact?.name||'Без имени')}</h2>${masterStatus(m)}</div><p>${PNAdmin.esc(m.contact?.phone||'Телефон не указан')} · ID ${PNAdmin.esc(m.legacy_id??'—')}</p><small>Рейтинг: ${Number(m.rating||0).toFixed(2)} · отзывов ${Number(m.reviews_count||0)}</small></div><div class="admin-card-actions"><a href="admin-master.html?id=${encodeURIComponent(m.legacy_id)}">Редактировать</a><a class="light" target="_blank" href="profile.html?id=${encodeURIComponent(m.legacy_id)}">Профиль</a></div></article>`).join(''):'<div class="admin-empty">Ничего не найдено</div>';
+ stats.innerHTML=`<div><b>${masters.length}</b><span>Всего мастеров</span></div><div><b>${masters.filter(x=>x.is_published&&!x.is_blocked).length}</b><span>Опубликовано</span></div><div><b>${masters.filter(x=>x.is_blocked).length}</b><span>Заблокировано</span></div>`;
+}
+function renderClients(){
+ const rows=clients.filter(c=>queryMatches([c.name,c.phone,c.city,c.id]));
+ clientHost.innerHTML=rows.length?rows.map(c=>`<article class="admin-master-card admin-client-card"><img src="${PNAdmin.esc(c.avatar_url||'icon-192.png')}" alt=""><div class="admin-master-copy"><div class="admin-master-title"><h2>${PNAdmin.esc(c.name||'Без имени')}</h2>${clientStatus(c)}</div><p>${PNAdmin.esc(c.phone||'Телефон не указан')} · ${PNAdmin.esc(c.city||'Город не указан')}</p><small>Регистрация: ${c.created_at?new Date(c.created_at).toLocaleDateString('ru-RU'):'—'}${c.blocked_reason?' · Причина: '+PNAdmin.esc(c.blocked_reason):''}</small></div><div class="admin-card-actions"><button class="admin-client-block-btn ${c.blocked?'light':''}" data-client-block="${PNAdmin.esc(c.id)}">${c.blocked?'Разблокировать':'Заблокировать'}</button></div></article>`).join(''):'<div class="admin-empty">Клиенты не найдены</div>';
+ stats.innerHTML=`<div><b>${clients.length}</b><span>Всего клиентов</span></div><div><b>${clients.filter(x=>!x.blocked).length}</b><span>Активно</span></div><div><b>${clients.filter(x=>x.blocked).length}</b><span>Заблокировано</span></div>`;
+ clientHost.querySelectorAll('[data-client-block]').forEach(btn=>btn.onclick=()=>toggleClientBlock(btn.dataset.clientBlock,btn));
+}
+function render(){currentView==='clients'?renderClients():renderMasters()}
+async function listClients(){
+ await PNAdmin.requireAdmin();
+ const {data,error}=await window.pnSupabase.functions.invoke('profinavi-admin-clients',{body:{action:'list'}});
+ if(error)throw error;if(data?.error)throw new Error(data.error);return data?.clients||[];
+}
+async function setClientBlocked(userId,blocked,reason=''){
+ await PNAdmin.requireAdmin();
+ const {data,error}=await window.pnSupabase.functions.invoke('profinavi-admin-clients',{body:{action:'set_block',user_id:userId,blocked,reason}});
+ if(error)throw error;if(data?.error)throw new Error(data.error);return data?.client||null;
+}
+async function toggleClientBlock(userId,button){
+ const row=clients.find(x=>x.id===userId);if(!row)return;
+ const next=!row.blocked;
+ let reason='';
+ if(next){if(!confirm(`Заблокировать клиента ${row.name||row.phone||''}?`))return;const entered=prompt('Причина блокировки (необязательно):','');if(entered===null)return;reason=entered.trim()}
+ else if(!confirm(`Разблокировать клиента ${row.name||row.phone||''}?`))return;
+ const old=button.textContent;button.disabled=true;button.textContent=next?'Блокируем…':'Разблокируем…';
+ try{const updated=await setClientBlocked(userId,next,reason);row.blocked=Boolean(updated?.blocked);row.blocked_reason=updated?.blocked_reason||null;row.blocked_at=updated?.blocked_at||null;row.banned_until=updated?.banned_until||null;renderClients()}
+ catch(e){alert('Не удалось изменить блокировку: '+e.message);button.disabled=false;button.textContent=old}
+}
+async function loadMasters(){masterHost.innerHTML='<div class="admin-loading">Загружаем мастеров…</div>';try{const u=await PNAdmin.requireAdmin();document.getElementById('adminIdentity').textContent=(u.app_metadata?.admin_name||'Admin')+' · '+(u.phone||u.user_metadata?.phone||'');masters=await PNAdmin.listMasters();if(currentView==='masters')renderMasters()}catch(e){masterHost.innerHTML='<div class="admin-error-box">'+PNAdmin.esc(e.message)+'</div>'}}
+async function loadClients(){clientHost.innerHTML='<div class="admin-loading">Загружаем клиентов…</div>';try{clients=await listClients();clientsLoaded=true;if(currentView==='clients')renderClients()}catch(e){clientHost.innerHTML='<div class="admin-error-box">'+PNAdmin.esc(e.message)+'</div>'}}
 function renderHomeBanners(){
  const byPos=Object.fromEntries(homeBanners.map(x=>[Number(x.position),x]));
- bannerHost.innerHTML=[1,2,3].map(pos=>{
-   const row=byPos[pos],src=row?.image_url||'icon-512.png';
-   return `<article class="admin-home-banner-card">
-     <img src="${PNAdmin.esc(src)}" alt="Баннер ${pos}">
-     <div><b>Баннер ${pos}</b><small>${row?.updated_at?'Обновлён '+new Date(row.updated_at).toLocaleString('ru-RU'):'Используется резервное изображение'}</small></div>
-     <label class="admin-home-banner-upload"><span>Изменить</span><input type="file" accept="image/*" data-home-banner="${pos}" hidden></label>
-   </article>`;
- }).join('');
- bannerHost.querySelectorAll('[data-home-banner]').forEach(input=>input.onchange=async()=>{
-   const file=input.files?.[0];if(!file)return;
-   const card=input.closest('.admin-home-banner-card'),label=card?.querySelector('.admin-home-banner-upload span');
-   const old=label?.textContent||'Изменить';if(label)label.textContent='Загрузка…';
-   try{await PNAdmin.saveHomeBanner(Number(input.dataset.homeBanner),file);await loadHomeBanners()}catch(e){alert('Не удалось сохранить баннер: '+e.message);if(label)label.textContent=old}
- });
+ bannerHost.innerHTML=[1,2,3].map(pos=>{const row=byPos[pos],src=row?.image_url||'icon-512.png';return `<article class="admin-home-banner-card"><img src="${PNAdmin.esc(src)}" alt="Баннер ${pos}"><div><b>Баннер ${pos}</b><small>${row?.updated_at?'Обновлён '+new Date(row.updated_at).toLocaleString('ru-RU'):'Используется резервное изображение'}</small></div><label class="admin-home-banner-upload"><span>Изменить</span><input type="file" accept="image/*" data-home-banner="${pos}" hidden></label></article>`}).join('');
+ bannerHost.querySelectorAll('[data-home-banner]').forEach(input=>input.onchange=async()=>{const file=input.files?.[0];if(!file)return;const card=input.closest('.admin-home-banner-card'),label=card?.querySelector('.admin-home-banner-upload span');const old=label?.textContent||'Изменить';if(label)label.textContent='Загрузка…';try{await PNAdmin.saveHomeBanner(Number(input.dataset.homeBanner),file);await loadHomeBanners()}catch(e){alert('Не удалось сохранить баннер: '+e.message);if(label)label.textContent=old}});
 }
-async function loadHomeBanners(){
- try{homeBanners=await PNAdmin.listHomeBanners();renderHomeBanners()}
- catch(e){bannerHost.innerHTML='<div class="admin-error-box">'+PNAdmin.esc(e.message)+'</div>'}
-}
-
+async function loadHomeBanners(){try{homeBanners=await PNAdmin.listHomeBanners();renderHomeBanners()}catch(e){bannerHost.innerHTML='<div class="admin-error-box">'+PNAdmin.esc(e.message)+'</div>'}}
 async function loadSupportBadge(){try{const rows=await PNAdmin.listSupportThreads();const n=rows.filter(x=>x.unreadCount>0).length,b=document.getElementById('adminSupportBadge');b.textContent=n||'';b.classList.toggle('hidden',!n)}catch(e){}}
-search.oninput=render;document.getElementById('adminReload').onclick=()=>{load();loadHomeBanners();loadSupportBadge()};document.getElementById('adminLogout').onclick=()=>PNAdmin.logout();load();loadHomeBanners();loadSupportBadge();
+async function setView(view,shouldLoad=true){
+ currentView=view==='clients'?'clients':'masters';search.value='';
+ document.querySelectorAll('[data-admin-view]').forEach(b=>b.classList.toggle('active',b.dataset.adminView===currentView));
+ const clientMode=currentView==='clients';pageTitle.textContent=clientMode?'Клиенты':'Мастера';search.placeholder=clientMode?'Поиск по имени, телефону, городу или ID':'Поиск по имени, телефону или ID';bannersSection.classList.toggle('hidden',clientMode);masterHost.classList.toggle('hidden',clientMode);clientHost.classList.toggle('hidden',!clientMode);
+ if(clientMode){if(shouldLoad&&!clientsLoaded)await loadClients();else renderClients()}else renderMasters();
+}
+async function reloadCurrent(){if(currentView==='clients')await loadClients();else{await Promise.all([loadMasters(),loadHomeBanners()])}loadSupportBadge()}
+search.oninput=render;document.getElementById('adminReload').onclick=reloadCurrent;document.querySelectorAll('[data-admin-view]').forEach(b=>b.onclick=()=>setView(b.dataset.adminView));document.getElementById('adminLogout').onclick=()=>PNAdmin.logout();
+setView('masters',false);loadMasters();loadHomeBanners();loadSupportBadge();
 </script></body></html>
